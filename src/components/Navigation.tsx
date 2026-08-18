@@ -1,10 +1,10 @@
 import React from 'react';
-import { Mic, LayoutDashboard, Briefcase, Settings } from 'lucide-react';
+import { Mic, LayoutDashboard, Briefcase, Settings, Target } from 'lucide-react';
 import clsx from 'clsx';
 
 interface NavigationProps {
-  activeTab: 'voice' | 'dashboard' | 'applications' | 'settings';
-  onTabChange: (tab: 'voice' | 'dashboard' | 'applications' | 'settings') => void;
+  activeTab: 'voice' | 'dashboard' | 'applications' | 'recall' | 'settings';
+  onTabChange: (tab: 'voice' | 'dashboard' | 'applications' | 'recall' | 'settings') => void;
   isListening?: boolean;
 }
 
@@ -31,6 +31,11 @@ export const Navigation: React.FC<NavigationProps> = ({
       icon: Briefcase,
     },
     {
+      id: 'recall' as const,
+      label: 'RECALL',
+      icon: Target,
+    },
+    {
       id: 'settings' as const,
       label: 'Settings',
       icon: Settings,
@@ -38,7 +43,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   ];
 
   return (
-    <nav className="fixed top-0 left-0 right-0 bg-slate-900 border-b border-slate-800 z-50">
+    <nav className="fixed top-0 left-0 right-0 bg-black/70 backdrop-blur-xl border-b border-zinc-900 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
@@ -60,8 +65,8 @@ export const Navigation: React.FC<NavigationProps> = ({
                   className={clsx(
                     'relative flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 font-medium text-sm',
                     isActive
-                      ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                      : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
+                      ? 'bg-fuchsia-500/20 text-fuchsia-300 border border-fuchsia-500/30 shadow-[0_0_15px_rgba(217,70,239,0.15)]'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50'
                   )}
                 >
                   <Icon size={18} />
@@ -77,7 +82,7 @@ export const Navigation: React.FC<NavigationProps> = ({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="text-slate-400 text-xs hidden sm:inline">Online</span>
+              <span className="text-zinc-400 text-xs hidden sm:inline">Online</span>
             </div>
           </div>
         </div>

@@ -11,6 +11,19 @@ from .schemas import (
     DashboardResponse,
     TTSRequest,
 )
+from .recall_schemas import (
+    MemoryFact,
+    TimelineEvent,
+    NextBestAction,
+    Prospect,
+    ProspectCreateRequest,
+    ProspectSummary,
+    RecallDashboardResponse,
+    RecallQueryRequest,
+    RecallQueryResponse,
+    ApproveActionResponse,
+    RecallActivityEvent,
+)
 
 __all__ = [
     "VoiceTranscribeRequest",
@@ -24,4 +37,15 @@ __all__ = [
     "MemoryResponse",
     "DashboardResponse",
     "TTSRequest",
+    "MemoryFact",
+    "TimelineEvent",
+    "NextBestAction",
+    "Prospect",
+    "ProspectCreateRequest",
+    "ProspectSummary",
+    "RecallDashboardResponse",
+    "RecallQueryRequest",
+    "RecallQueryResponse",
+    "ApproveActionResponse",
+    "RecallActivityEvent",
 ]

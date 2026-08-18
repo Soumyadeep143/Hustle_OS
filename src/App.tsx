@@ -5,10 +5,12 @@ import {
   Dashboard,
   Applications,
   Settings,
+  ErrorBoundary,
 } from './components';
+import { RecallModule } from './components/recall';
 import './styles/globals.css';
 
-type Tab = 'voice' | 'dashboard' | 'applications' | 'settings';
+type Tab = 'voice' | 'dashboard' | 'applications' | 'recall' | 'settings';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('voice');
@@ -27,6 +29,8 @@ function App() {
         return <Dashboard />;
       case 'applications':
         return <Applications />;
+      case 'recall':
+        return <RecallModule />;
       case 'settings':
         return <Settings />;
       default:
@@ -35,7 +39,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen">
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
 
       {/* Main Content */}
@@ -50,22 +54,26 @@ function App() {
                 ? 'Dashboard'
                 : activeTab === 'applications'
                 ? 'Applications'
+                : activeTab === 'recall'
+                ? 'RECALL'
                 : 'Settings'}
             </h1>
-            <p className="text-slate-400">
+            <p className="text-zinc-400">
               {activeTab === 'voice'
                 ? 'Control HustleOS with your voice'
                 : activeTab === 'dashboard'
                 ? 'Track your job search progress'
                 : activeTab === 'applications'
                 ? 'Manage your applications'
+                : activeTab === 'recall'
+                ? 'AI growth memory & execution engine'
                 : 'Customize your HustleOS experience'}
             </p>
           </div>
 
           {/* Content */}
           <div className="animate-slideInFromTop">
-            {renderContent()}
+            <ErrorBoundary key={activeTab}>{renderContent()}</ErrorBoundary>
           </div>
         </div>
       </main>

@@ -1,151 +1,59 @@
-import React from 'react';
-import { ExternalLink, Trash2, MessageSquare } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { Card } from './Card';
 import { Badge } from './Badge';
 import { Button } from './Button';
+import { api, getErrorMessage, type Application } from '../services/api';
 
-interface Application {
-  id: number;
-  company: string;
-  position: string;
-  appliedDate: string;
-  salary?: string;
-  match: number;
-  notes?: string;
-}
-
-const APPLICATIONS: Record<string, Application[]> = {
-  applied: [
-    {
-      id: 1,
-      company: 'OpenAI',
-      position: 'ML Engineer',
-      appliedDate: 'Aug 15',
-      salary: '₹50-70L',
-      match: 95,
-    },
-    {
-      id: 2,
-      company: 'Anthropic',
-      position: 'AI Research Engineer',
-      appliedDate: 'Aug 14',
-      salary: '₹55-75L',
-      match: 92,
-    },
-    {
-      id: 3,
-      company: 'Mem0',
-      position: 'Senior ML Engineer',
-      appliedDate: 'Aug 12',
-      salary: '₹40-60L',
-      match: 88,
-    },
-  ],
-  reviewing: [
-    {
-      id: 4,
-      company: 'Google',
-      position: 'AI Engineer',
-      appliedDate: 'Aug 10',
-      salary: '₹60-80L',
-      match: 90,
-      notes: 'Under review - 5 days',
-    },
-    {
-      id: 5,
-      company: 'DeepMind',
-      position: 'Research Scientist',
-      appliedDate: 'Aug 8',
-      salary: '₹65-85L',
-      match: 87,
-      notes: 'Profile reviewed',
-    },
-  ],
-  interview: [
-    {
-      id: 6,
-      company: 'OpenAI',
-      position: 'ML Engineer',
-      appliedDate: 'Aug 7',
-      salary: '₹50-70L',
-      match: 95,
-      notes: 'Round 1: Aug 20',
-    },
-    {
-      id: 7,
-      company: 'Anthropic',
-      position: 'AI Research Engineer',
-      appliedDate: 'Aug 5',
-      salary: '₹55-75L',
-      match: 92,
-      notes: 'Round 2: Aug 25',
-    },
-  ],
-};
+const COLUMNS: Array<{ key: string; title: string; color: string }> = [
+  { key: 'applied', title: 'Applied', color: 'border-l-fuchsia-500' },
+  { key: 'reviewing', title: 'Reviewing', color: 'border-l-amber-500' },
+  { key: 'interview', title: 'Interview', color: 'border-l-emerald-500' },
+];
 
 const KanbanColumn: React.FC<{
   title: string;
-  count: number;
   applications: Application[];
   color: string;
-}> = ({ title, count, applications, color }) => {
+}> = ({ title, applications, color }) => {
   return (
     <div className="flex-1 min-w-0">
       <div className="mb-4">
         <div className="flex items-center gap-2 mb-3">
           <h3 className="font-semibold text-white">{title}</h3>
           <Badge variant="info" size="sm">
-            {count}
+            {applications.length}
           </Badge>
         </div>
       </div>
 
       <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+        {applications.length === 0 && (
+          <p className="text-sm text-zinc-500 italic">No applications here yet.</p>
+        )}
         {applications.map((app) => (
-          <Card
-            key={app.id}
-            variant="dark"
-            hover
-            className={`border-l-4 ${color} cursor-move group`}
-          >
+          <Card key={app.id} variant="dark" hover className={`border-l-4 ${color} group`}>
             <div className="space-y-3">
               <div>
-                <h4 className="font-semibold text-white group-hover:text-blue-400 transition-colors">
+                <h4 className="font-semibold text-white group-hover:text-fuchsia-400 transition-colors">
                   {app.company}
                 </h4>
-                <p className="text-sm text-slate-400">{app.position}</p>
+                <p className="text-sm text-zinc-400">{app.role}</p>
               </div>
 
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                  {app.salary && (
-                    <Badge variant="success" size="sm">
-                      {app.salary}
-                    </Badge>
-                  )}
-                  <Badge variant="info" size="sm">
-                    {app.match}% match
-                  </Badge>
-                </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="info" size="sm">
+                  {app.match_score}% match
+                </Badge>
               </div>
 
-              {app.notes && (
-                <p className="text-xs text-slate-400 italic">{app.notes}</p>
+              {app.notes && <p className="text-xs text-zinc-400 italic">{app.notes}</p>}
+              {app.last_followup && (
+                <p className="text-xs text-zinc-500">Last follow-up: {app.last_followup}</p>
               )}
 
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-700">
-                <span className="text-xs text-slate-500">{app.appliedDate}</span>
-                <div className="flex items-center gap-1">
-                  <button className="p-1.5 hover:bg-slate-700 rounded transition-colors text-slate-400 hover:text-slate-200">
-                    <MessageSquare size={16} />
-                  </button>
-                  <button className="p-1.5 hover:bg-slate-700 rounded transition-colors text-slate-400 hover:text-slate-200">
-                    <ExternalLink size={16} />
-                  </button>
-                  <button className="p-1.5 hover:bg-red-500/10 rounded transition-colors text-slate-400 hover:text-red-400">
-                    <Trash2 size={16} />
-                  </button>
-                </div>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-700">
+                <span className="text-xs text-zinc-500">{app.applied_at}</span>
               </div>
             </div>
           </Card>
@@ -156,6 +64,58 @@ const KanbanColumn: React.FC<{
 };
 
 export const Applications: React.FC = () => {
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadApplications = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const result = await api.memory.get();
+      setApplications(result.applications);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadApplications();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-10 h-10 border-4 border-fuchsia-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card variant="dark" className="border-l-4 border-l-red-500">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-red-300 text-sm">{error}</p>
+          <button
+            onClick={loadApplications}
+            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors flex-shrink-0"
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
+        </div>
+      </Card>
+    );
+  }
+
+  const byStatus = (status: string) => applications.filter((a) => a.status === status);
+  const reviewingCount = byStatus('reviewing').length;
+  const interviewCount = byStatus('interview').length;
+  const avgMatch = applications.length
+    ? Math.round(applications.reduce((sum, a) => sum + a.match_score, 0) / applications.length)
+    : 0;
+
   return (
     <div className="space-y-6 animate-fadeIn">
       <div className="flex items-center justify-between">
@@ -167,45 +127,28 @@ export const Applications: React.FC = () => {
 
       {/* Kanban Board */}
       <div className="flex gap-4 overflow-x-auto pb-4">
-        <KanbanColumn
-          title="Applied"
-          count={APPLICATIONS.applied.length}
-          applications={APPLICATIONS.applied}
-          color="border-l-blue-500"
-        />
-        <KanbanColumn
-          title="Reviewing"
-          count={APPLICATIONS.reviewing.length}
-          applications={APPLICATIONS.reviewing}
-          color="border-l-amber-500"
-        />
-        <KanbanColumn
-          title="Interview"
-          count={APPLICATIONS.interview.length}
-          applications={APPLICATIONS.interview}
-          color="border-l-emerald-500"
-        />
+        {COLUMNS.map((col) => (
+          <KanbanColumn
+            key={col.key}
+            title={col.title}
+            applications={byStatus(col.key)}
+            color={col.color}
+          />
+        ))}
       </div>
 
       {/* Stats Footer */}
       <Card variant="gradient">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {[
-            {
-              label: 'Total Applications',
-              value: String(
-                APPLICATIONS.applied.length +
-                  APPLICATIONS.reviewing.length +
-                  APPLICATIONS.interview.length
-              ),
-            },
-            { label: 'Pending Review', value: String(APPLICATIONS.reviewing.length) },
-            { label: 'Interviews', value: String(APPLICATIONS.interview.length) },
-            { label: 'Avg Response Time', value: '3.2 days' },
+            { label: 'Total Applications', value: String(applications.length) },
+            { label: 'Pending Review', value: String(reviewingCount) },
+            { label: 'Interviews', value: String(interviewCount) },
+            { label: 'Avg Match Score', value: `${avgMatch}%` },
           ].map((stat, i) => (
             <div key={i} className="text-center">
-              <p className="text-slate-300 text-sm mb-1">{stat.label}</p>
-              <p className="text-2xl font-bold text-blue-300">{stat.value}</p>
+              <p className="text-zinc-300 text-sm mb-1">{stat.label}</p>
+              <p className="text-2xl font-bold text-fuchsia-300">{stat.value}</p>
             </div>
           ))}
         </div>

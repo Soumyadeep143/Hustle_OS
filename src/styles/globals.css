@@ -7,10 +7,19 @@
 }
 
 html, body {
-  background-color: rgb(15, 23, 42);
+  background-color: #07050c;
   color: rgb(248, 250, 252);
   font-family: 'Inter', system-ui, sans-serif;
   scroll-behavior: smooth;
+}
+
+body {
+  background-image:
+    radial-gradient(ellipse 900px 550px at 50% -12%, rgba(37, 99, 235, 0.25), transparent 70%),
+    radial-gradient(ellipse 700px 450px at 85% 5%, rgba(229, 57, 53, 0.12), transparent 70%),
+    radial-gradient(ellipse 500px 400px at 10% 15%, rgba(37, 99, 235, 0.15), transparent 70%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 /* Animations */
@@ -67,11 +76,78 @@ html, body {
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 20px rgba(52, 152, 219, 0.5);
+    box-shadow: 0 0 20px rgba(37, 99, 235, 0.5);
   }
   50% {
-    box-shadow: 0 0 40px rgba(52, 152, 219, 0.8);
+    box-shadow: 0 0 45px rgba(37, 99, 235, 0.85);
   }
+}
+
+@keyframes orbBreathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 60px 10px rgba(37, 99, 235, 0.45), 0 0 120px 30px rgba(229, 57, 53, 0.2);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 80px 20px rgba(37, 99, 235, 0.6), 0 0 160px 50px rgba(229, 57, 53, 0.3);
+  }
+}
+
+@keyframes orbSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes orbSpinReverse {
+  from {
+    transform: rotate(360deg);
+  }
+  to {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes hosBreathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.075); }
+}
+
+@keyframes hosMorph {
+  0%   { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; transform: rotate(0deg) scale(1); }
+  33%  { border-radius: 45% 55% 38% 62% / 58% 42% 60% 40%; transform: rotate(120deg) scale(1.08); }
+  66%  { border-radius: 56% 44% 62% 38% / 40% 58% 44% 60%; transform: rotate(240deg) scale(0.94); }
+  100% { border-radius: 60% 40% 55% 45% / 50% 60% 40% 50%; transform: rotate(360deg) scale(1); }
+}
+
+@keyframes hosMorphRev {
+  0%   { border-radius: 50% 50% 45% 55% / 55% 45% 55% 45%; transform: rotate(360deg) scale(1.02); }
+  50%  { border-radius: 62% 38% 58% 42% / 42% 62% 38% 58%; transform: rotate(180deg) scale(0.9); }
+  100% { border-radius: 50% 50% 45% 55% / 55% 45% 55% 45%; transform: rotate(0deg) scale(1.02); }
+}
+
+@keyframes hosRipple {
+  0% { transform: scale(0.68); opacity: 0.45; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+
+@keyframes hosGlow {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes hosWave {
+  0%, 100% { transform: scaleY(0.22); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes hosDrift {
+  0%, 100% { transform: translate(0, 0); }
+  50% { transform: translate(6px, -8px); }
 }
 
 /* Component Styles */

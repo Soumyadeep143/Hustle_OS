@@ -41,5 +41,7 @@ Thumbs.db
 
 # Project
 memory.json
+recall_state.json
+recall_memory.json
 .env.local
 .env.*.local

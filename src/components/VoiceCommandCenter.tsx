@@ -1,21 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Send } from 'lucide-react';
-import { Button } from './Button';
-import { Badge } from './Badge';
+import React from 'react';
+import { X, RotateCcw } from 'lucide-react';
 import { Card } from './Card';
-import clsx from 'clsx';
+import { getErrorMessage } from '../services/api';
+import { useVoiceStore } from '../store/voiceStore';
+import { useVoiceSession } from '../hooks/useVoiceSession';
+import { VoiceOrb } from './VoiceOrb';
 
 interface VoiceCommandCenterProps {
   onCommand?: (command: string) => void;
 }
-
-const MOCK_RESPONSES: Record<string, string> = {
-  'find ai jobs': 'Found 5 AI opportunities in Bangalore. Companies looking for ML engineers. Top match: 4.8/5 relevance.',
-  'show status': '12 applications pending, 3 need follow-up. 2 companies have reviewed your profile. 1 interview scheduled.',
-  'daily plan': 'Today\'s priorities: Follow up with 2 companies, apply to 3 new positions, prepare for 1 interview.',
-  'who to follow up': 'You should follow up with: OpenAI (5 days), Anthropic (3 days), Mem0 (7 days).',
-  'apply to top 3': 'Ready to apply to OpenAI, Anthropic, Mem0. Processing 3 applications. Estimated time: 2 minutes.',
-};
 
 const QUICK_COMMANDS = [
   'Find AI jobs',
@@ -26,63 +19,26 @@ const QUICK_COMMANDS = [
 ];
 
 export const VoiceCommandCenter: React.FC<VoiceCommandCenterProps> = ({ onCommand }) => {
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState('');
-  const [response, setResponse] = useState('');
-  const [history, setHistory] = useState<Array<{ command: string; response: string }>>([]);
-  const [waveformBars, setWaveformBars] = useState<number[]>(Array(20).fill(0.3));
-  const waveformIntervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const { addToHistory } = useVoiceStore();
+  const { state, level, transcript, answer, error, start, stop, interrupt } = useVoiceSession();
 
-  // Animate waveform
-  useEffect(() => {
-    if (isListening) {
-      waveformIntervalRef.current = setInterval(() => {
-        setWaveformBars((bars) =>
-          bars.map(() => Math.random() * 0.9 + 0.1)
-        );
-      }, 100);
-    } else {
-      if (waveformIntervalRef.current) {
-        clearInterval(waveformIntervalRef.current);
-      }
-      setWaveformBars(Array(20).fill(0.3));
-    }
-
-    return () => {
-      if (waveformIntervalRef.current) {
-        clearInterval(waveformIntervalRef.current);
-      }
-    };
-  }, [isListening]);
-
-  const handleMicClick = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      setTranscript('Listening...');
-    } else {
-      setTranscript('');
-      // Simulate processing
-      setTimeout(() => {
-        setTranscript('Find me AI jobs in Bangalore');
-      }, 500);
+  const handleOrbTap = () => {
+    if (state === 'idle') {
+      start();
+    } else if (state === 'listening') {
+      stop();
+    } else if (state === 'speaking') {
+      interrupt();
     }
   };
 
-  const handleSendCommand = (command?: string) => {
-    const finalCommand = command || transcript;
-    if (!finalCommand.trim()) return;
-
-    // Find matching response
-    const key = Object.keys(MOCK_RESPONSES).find((k) =>
-      finalCommand.toLowerCase().includes(k) || k.includes(finalCommand.toLowerCase())
-    );
-    const mockResponse = key ? MOCK_RESPONSES[key] : 'Command received. Processing your request...';
-
-    setResponse(mockResponse);
-    setHistory([{ command: finalCommand, response: mockResponse }, ...history.slice(0, 4)]);
-    setTranscript('');
-    setIsListening(false);
-    onCommand?.(finalCommand);
+  const handleQuickCommand = (cmd: string) => {
+    try {
+      addToHistory({ command: cmd, response: answer, timestamp: Date.now() });
+      onCommand?.(cmd);
+    } catch (err) {
+      console.error('Command failed:', getErrorMessage(err));
+    }
   };
 
   return (
@@ -90,63 +46,40 @@ export const VoiceCommandCenter: React.FC<VoiceCommandCenterProps> = ({ onComman
       {/* Main Voice Interface */}
       <Card variant="gradient" animated>
         <div className="flex flex-col items-center space-y-6">
-          {/* Waveform Visualization */}
-          <div className="flex items-center justify-center gap-1 h-24 w-full">
-            {waveformBars.map((height, i) => (
-              <div
-                key={i}
-                className={clsx(
-                  'flex-1 bg-gradient-to-t from-blue-500 to-blue-300 rounded-full transition-all duration-100',
-                  isListening ? 'opacity-100' : 'opacity-50'
-                )}
-                style={{
-                  height: `${Math.max(height * 100, 10)}%`,
-                  minHeight: '10px',
-                }}
-              />
-            ))}
+          {/* Animated Voice Orb */}
+          <div onClick={handleOrbTap} className="cursor-pointer">
+            <VoiceOrb state={state} level={level} onTap={handleOrbTap} />
           </div>
 
-          {/* Microphone Button */}
-          <button
-            onClick={handleMicClick}
-            className={clsx(
-              'relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200',
-              isListening
-                ? 'bg-red-500 shadow-lg shadow-red-500/50 animate-pulseGlow'
-                : 'bg-blue-500 shadow-lg shadow-blue-500/30 hover:bg-blue-600'
-            )}
-          >
-            <Mic size={32} className="text-white" />
-            {isListening && (
-              <div className="absolute inset-0 rounded-full border-2 border-red-400 animate-pulse" />
-            )}
-          </button>
-
-          {/* Status */}
-          <div className="text-center space-y-2">
-            <p className={clsx('text-sm font-medium', isListening ? 'text-red-300' : 'text-slate-300')}>
-              {isListening ? 'Listening...' : 'Click to speak'}
+          {/* Status & Transcript */}
+          <div className="text-center space-y-2 min-h-[4rem]">
+            <p className="text-sm font-medium text-blue-400">
+              {state === 'idle' && 'Click to speak'}
+              {state === 'listening' && "I'm Listening..."}
+              {state === 'thinking' && 'Processing...'}
+              {state === 'speaking' && 'Responding...'}
             </p>
             {transcript && <p className="text-lg text-white font-medium">{transcript}</p>}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 w-full max-w-xs">
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Send size={16} />}
-              onClick={() => handleSendCommand()}
-              disabled={!transcript.trim()}
-              fullWidth
-            >
-              Send
-            </Button>
-            {isListening && (
-              <Button variant="danger" size="md" onClick={() => setIsListening(false)} fullWidth>
-                Cancel
-              </Button>
+          {/* Quick Actions */}
+          <div className="flex gap-3">
+            {state === 'listening' && (
+              <button
+                onClick={stop}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm text-white font-medium transition-colors"
+              >
+                Stop & Send
+              </button>
+            )}
+            {(state === 'thinking' || state === 'speaking') && (
+              <button
+                onClick={interrupt}
+                className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg text-sm text-white font-medium transition-colors flex items-center gap-2"
+              >
+                <RotateCcw size={14} />
+                Try Again
+              </button>
             )}
           </div>
         </div>
@@ -154,13 +87,14 @@ export const VoiceCommandCenter: React.FC<VoiceCommandCenterProps> = ({ onComman
 
       {/* Quick Commands */}
       <div>
-        <h3 className="text-sm font-semibold text-slate-300 mb-3">Quick Commands</h3>
+        <h3 className="text-sm font-semibold text-zinc-300 mb-3">Quick Commands</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
           {QUICK_COMMANDS.map((cmd) => (
             <button
               key={cmd}
-              onClick={() => handleSendCommand(cmd)}
-              className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-sm text-slate-200 transition-colors border border-slate-700 hover:border-blue-500/30"
+              onClick={() => handleQuickCommand(cmd)}
+              disabled={state !== 'idle'}
+              className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm text-zinc-200 transition-colors border border-zinc-700 hover:border-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {cmd}
             </button>
@@ -168,36 +102,32 @@ export const VoiceCommandCenter: React.FC<VoiceCommandCenterProps> = ({ onComman
         </div>
       </div>
 
-      {/* Response */}
-      {response && (
-        <Card variant="default" animated>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h4 className="font-semibold text-blue-400">Response</h4>
-              <Badge variant="info">AI Generated</Badge>
-            </div>
-            <p className="text-slate-200 leading-relaxed">{response}</p>
+      {/* Error */}
+      {error && (
+        <Card variant="dark" className="border-l-4 border-l-red-500" animated>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-red-300">{error}</p>
+            <button
+              onClick={() => start()}
+              className="text-zinc-400 hover:text-zinc-200 flex-shrink-0"
+              aria-label="Try again"
+            >
+              <RotateCcw size={16} />
+            </button>
           </div>
         </Card>
       )}
 
-      {/* Command History */}
-      {history.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-300">Recent Commands</h3>
-          {history.map((item, i) => (
-            <Card key={i} variant="dark" hover>
-              <div className="space-y-2">
-                <p className="text-sm text-slate-300">
-                  <span className="font-medium text-blue-400">You:</span> {item.command}
-                </p>
-                <p className="text-sm text-slate-400">
-                  <span className="font-medium text-emerald-400">HustleOS:</span> {item.response}
-                </p>
-              </div>
-            </Card>
-          ))}
-        </div>
+      {/* Response */}
+      {answer && (
+        <Card variant="default" animated>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h4 className="font-semibold text-blue-400">Response</h4>
+            </div>
+            <p className="text-zinc-200 leading-relaxed">{answer}</p>
+          </div>
+        </Card>
       )}
     </div>
   );

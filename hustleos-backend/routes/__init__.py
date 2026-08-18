@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import voice, opportunities, dashboard, memory
+from . import voice, opportunities, dashboard, memory, recall
 
 def create_router():
     router = APIRouter()
@@ -8,5 +8,6 @@ def create_router():
     router.include_router(opportunities.router, prefix="/opportunity", tags=["opportunities"])
     router.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
     router.include_router(memory.router, prefix="/memory", tags=["memory"])
+    router.include_router(recall.router, prefix="/recall", tags=["recall"])
 
     return router

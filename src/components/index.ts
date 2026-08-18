@@ -6,3 +6,4 @@ export { VoiceCommandCenter } from './VoiceCommandCenter';
 export { Dashboard } from './Dashboard';
 export { Applications } from './Applications';
 export { Settings } from './Settings';
+export { ErrorBoundary } from './ErrorBoundary';

@@ -20,12 +20,12 @@ export const Card: React.FC<CardProps> = ({
   const baseStyles = 'rounded-lg border p-6 transition-all duration-300';
 
   const variantStyles = {
-    default: 'bg-slate-800 border-slate-700',
-    gradient: 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-600',
-    dark: 'bg-slate-900 border-slate-800',
+    default: 'bg-zinc-900/80 border-zinc-800',
+    gradient: 'bg-gradient-to-br from-blue-950/40 via-zinc-900/80 to-red-950/30 border-blue-900/40',
+    dark: 'bg-black/60 border-zinc-900',
   };
 
-  const hoverStyles = hover ? 'hover:shadow-xl hover:border-blue-500/50' : '';
+  const hoverStyles = hover ? 'hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-500/30' : '';
   const animationStyles = animated ? 'animate-fadeIn' : '';
 
   return (

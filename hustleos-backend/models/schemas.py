@@ -55,6 +55,7 @@ class UserProfile(BaseModel):
     target_role: str
     target_location: str
     skills: List[str]
+    bio: Optional[str] = None
 
 
 class MemoryResponse(BaseModel):

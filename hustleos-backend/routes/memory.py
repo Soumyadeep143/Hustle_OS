@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Query
-from models import MemoryResponse
+from models import MemoryResponse, UserProfile
 from agents import MemoryAgent
 from typing import Dict
 
@@ -36,3 +36,12 @@ async def get_memory(
             applications=[],
             insights=[f"Error loading memory: {str(e)}"],
         )
+
+@router.post("/", response_model=UserProfile)
+async def update_profile(
+    profile: UserProfile,
+    agent: MemoryAgent = Depends(get_memory_agent),
+):
+    """Update user profile"""
+    updated = agent.update_profile(profile.dict())
+    return updated

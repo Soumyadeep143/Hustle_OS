@@ -1,15 +1,15 @@
 import os
 from openai import OpenAI
-from elevenlabs import client as elevenlabs_client, VoiceSettings
 from typing import Dict, Optional
 import json
+
+from voice_providers import get_voice_provider
 
 
 class VoiceAgent:
     def __init__(self):
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
-        self.voice_id = os.getenv("ELEVENLABS_VOICE_ID", "default")
+        self.voice_provider = get_voice_provider()
 
     def speech_to_text(self, audio_bytes: bytes) -> str:
         """Transcribe audio using Whisper API"""
@@ -26,23 +26,15 @@ class VoiceAgent:
             return ""
 
     def text_to_speech(self, text: str, voice_id: Optional[str] = None) -> str:
-        """Generate speech using ElevenLabs API"""
+        """Generate speech via the active VoiceProvider (Sarvam or
+        ElevenLabs, whichever resolves — see voice_providers/__init__.py).
+        Returns a playable data: URI, or "" if no provider is usable."""
+        if not self.voice_provider or not text:
+            return ""
         try:
-            if not self.elevenlabs_api_key:
-                print("ElevenLabs API key not configured")
-                return ""
-
-            voice_id = voice_id or self.voice_id
-
-            response = elevenlabs_client.generate(
-                text=text,
-                voice=voice_id,
-                model="eleven_monolingual_v1",
-            )
-
-            return "audio_url_placeholder"
+            return self.voice_provider.synthesize(text, voice_id)
         except Exception as e:
-            print(f"Error in text-to-speech: {e}")
+            print(f"Error in text-to-speech ({self.voice_provider.name}): {e}")
             return ""
 
     def detect_intent(self, transcript: str) -> str:
@@ -123,5 +115,5 @@ class VoiceAgent:
         return {
             "response": response_text,
             "intent": intent,
-            "audio_url": None,
+            "audio_url": self.text_to_speech(response_text) or None,
         }

@@ -92,6 +92,14 @@ class MemoryAgent:
         self._save_memory()
         return application
 
+    def update_profile(self, profile: Dict) -> Dict:
+        self.memory["user_profile"] = {
+            **self.memory.get("user_profile", {}),
+            **profile,
+        }
+        self._save_memory()
+        return self.memory["user_profile"]
+
     def get_applications(self) -> List[Dict]:
         apps = self.memory.get("applications", [])
         return sorted(apps, key=lambda x: x["applied_at"], reverse=True)

@@ -4,6 +4,13 @@ python-dotenv==1.0.0
 openai==1.3.0
 anthropic==0.7.0
 elevenlabs==0.2.24
-pydantic==2.5.0
+pydantic==1.10.13
 httpx==0.25.0
 aiofiles==23.2.1
+python-multipart==0.0.6
+
+# Mem0 integration for RECALL (memory_providers/mem0_provider.py) talks to
+# the Mem0 REST API directly over httpx (already pinned above) instead of
+# the mem0ai SDK, which requires pydantic>=2 and would conflict with the
+# pydantic==1.10.13 pin needed for elevenlabs==0.2.24. No extra package is
+# required — set MEM0_API_KEY in .env to activate it.
