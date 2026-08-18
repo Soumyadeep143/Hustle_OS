@@ -1,0 +1,134 @@
+import json
+import os
+from datetime import datetime
+from typing import Dict, List, Optional
+
+
+class MemoryAgent:
+    def __init__(self, memory_file: str = "memory.json"):
+        self.memory_file = memory_file
+        self.memory = self._load_memory()
+
+    def _load_memory(self) -> Dict:
+        if os.path.exists(self.memory_file):
+            with open(self.memory_file, "r") as f:
+                return json.load(f)
+        return self._get_default_memory()
+
+    def _get_default_memory(self) -> Dict:
+        return {
+            "user_profile": {
+                "name": "Soumyadeep",
+                "email": "soumya@example.com",
+                "target_role": "AI Engineer",
+                "target_location": "Bengaluru",
+                "skills": ["Python", "ML", "LLMs", "FastAPI", "React"],
+            },
+            "applications": [
+                {
+                    "id": "app_1",
+                    "company": "OpenAI",
+                    "role": "AI Engineer Intern",
+                    "applied_at": "2026-08-12",
+                    "status": "applied",
+                    "match_score": 94,
+                    "description": "Build AI systems at scale",
+                    "last_followup": None,
+                    "notes": "",
+                },
+                {
+                    "id": "app_2",
+                    "company": "Anthropic",
+                    "role": "ML Engineer",
+                    "applied_at": "2026-08-13",
+                    "status": "reviewing",
+                    "match_score": 91,
+                    "description": "AI safety and research",
+                    "last_followup": "2026-08-15",
+                    "notes": "",
+                },
+                {
+                    "id": "app_3",
+                    "company": "Mem0",
+                    "role": "AI Engineer",
+                    "applied_at": "2026-08-15",
+                    "status": "interview",
+                    "match_score": 89,
+                    "description": "Memory AI infrastructure",
+                    "last_followup": "2026-08-17",
+                    "notes": "",
+                },
+            ],
+        }
+
+    def _save_memory(self):
+        with open(self.memory_file, "w") as f:
+            json.dump(self.memory, f, indent=2)
+
+    def load_memory(self) -> Dict:
+        return self.memory
+
+    def save_opportunity(
+        self,
+        company: str,
+        role: str,
+        status: str,
+        match_score: int,
+        description: str,
+    ) -> Dict:
+        app_id = f"app_{len(self.memory['applications']) + 1}"
+        application = {
+            "id": app_id,
+            "company": company,
+            "role": role,
+            "applied_at": datetime.now().isoformat()[:10],
+            "status": status,
+            "match_score": match_score,
+            "description": description,
+            "last_followup": None,
+            "notes": "",
+        }
+        self.memory["applications"].append(application)
+        self._save_memory()
+        return application
+
+    def get_applications(self) -> List[Dict]:
+        apps = self.memory.get("applications", [])
+        return sorted(apps, key=lambda x: x["applied_at"], reverse=True)
+
+    def detect_insights(self) -> List[str]:
+        insights = []
+        today = datetime.now().date()
+
+        for app in self.memory.get("applications", []):
+            applied_date = datetime.fromisoformat(app["applied_at"]).date()
+            days_since_applied = (today - applied_date).days
+
+            last_followup = app.get("last_followup")
+            if last_followup:
+                followup_date = datetime.fromisoformat(last_followup).date()
+                days_since_followup = (today - followup_date).days
+            else:
+                days_since_followup = days_since_applied
+
+            if days_since_followup > 5 and app["status"] in ["applied", "reviewing"]:
+                insights.append(
+                    f"Follow up with {app['company']} ({days_since_followup} days without contact)"
+                )
+
+        if len(self.memory.get("applications", [])) < 5:
+            insights.append("Increase application rate to 5+ per week")
+
+        interviews = [a for a in self.memory.get("applications", []) if a["status"] == "interview"]
+        if interviews:
+            insights.append(f"Prepare for {len(interviews)} upcoming interview(s)")
+
+        return insights[:3] if insights else ["Stay focused on your job search goals"]
+
+    def get_user_context(self) -> Dict:
+        return {
+            "profile": self.memory["user_profile"],
+            "applications": self.get_applications(),
+            "total_applications": len(self.memory["applications"]),
+            "insights": self.detect_insights(),
+        }
