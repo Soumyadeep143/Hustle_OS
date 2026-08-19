@@ -8,6 +8,7 @@ pydantic==1.10.13
 httpx==0.25.0
 aiofiles==23.2.1
 python-multipart==0.0.6
+psycopg2-binary==2.9.9
 
 # Mem0 integration for RECALL (memory_providers/mem0_provider.py) talks to
 # the Mem0 REST API directly over httpx (already pinned above) instead of
