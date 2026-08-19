@@ -82,12 +82,6 @@ class RecallQueryResponse(BaseModel):
     grounded: bool = True
 
 
-class ApproveActionResponse(BaseModel):
-    prospect: Prospect
-    result: str
-    executed_by: str  # "local" | "neevcloud"
-
-
 class RecallActivityEvent(BaseModel):
     id: str
     agent: str

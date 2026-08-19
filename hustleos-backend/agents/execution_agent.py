@@ -6,7 +6,7 @@ from execution_providers import ExecutionProvider, get_execution_provider
 class ExecutionAgent:
     """Turns an approved recommendation into a real artifact via the
     active ExecutionProvider. Never runs without prior user approval —
-    routes only call this after an explicit /approve request."""
+    routes only call this after an explicit /execute request."""
 
     def __init__(self, provider: Optional[ExecutionProvider] = None):
         self.provider = provider or get_execution_provider()

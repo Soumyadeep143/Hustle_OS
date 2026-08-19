@@ -185,7 +185,17 @@ export interface RecallDashboardResponse {
   insights: string[];
 }
 
-export interface RecallApproveResponse {
+export type RecallExecuteAgent = 'memory' | 'execution' | 'strategy';
+
+export interface RecallExecuteEvent {
+  agent: RecallExecuteAgent;
+  status: 'running' | 'done';
+  detail?: string;
+}
+
+export interface RecallExecuteResult {
+  agent: 'result';
+  status: 'done';
   prospect: RecallProspect;
   result: string;
   executed_by: string;
@@ -284,9 +294,32 @@ export const api = {
       const { data } = await apiClient.post<RecallProspect>('/recall/prospects', request);
       return data;
     },
-    approve: async (id: string): Promise<RecallApproveResponse> => {
-      const { data } = await apiClient.post<RecallApproveResponse>(`/recall/prospects/${id}/approve`);
-      return data;
+    execute: async (
+      id: string,
+      onEvent: (event: RecallExecuteEvent | RecallExecuteResult) => void
+    ): Promise<void> => {
+      const res = await fetch(`${API_URL}/api/recall/prospects/${id}/execute`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
+        throw new Error((data as { detail?: string } | null)?.detail || `Request failed (${res.status})`);
+      }
+      if (!res.body) throw new Error('Streaming is not supported in this browser');
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() ?? '';
+        for (const chunk of events) {
+          const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+          if (!line) continue;
+          onEvent(JSON.parse(line.slice(6)));
+        }
+      }
     },
     getDashboard: async (): Promise<RecallDashboardResponse> => {
       const { data } = await apiClient.get<RecallDashboardResponse>('/recall/dashboard');

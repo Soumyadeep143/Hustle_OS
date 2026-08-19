@@ -21,7 +21,6 @@ from .recall_schemas import (
     RecallDashboardResponse,
     RecallQueryRequest,
     RecallQueryResponse,
-    ApproveActionResponse,
     RecallActivityEvent,
 )
 
@@ -46,6 +45,5 @@ __all__ = [
     "RecallDashboardResponse",
     "RecallQueryRequest",
     "RecallQueryResponse",
-    "ApproveActionResponse",
     "RecallActivityEvent",
 ]

@@ -1,9 +1,11 @@
+import asyncio
+import json
 from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 
 from models import (
-    ApproveActionResponse,
     Prospect,
     ProspectCreateRequest,
     ProspectSummary,
@@ -232,9 +234,12 @@ async def get_prospect(prospect_id: str, deps: Dict = Depends(get_recall_deps)):
     return Prospect(**prospect, memory=_facts_for_prospect(memory, prospect_id))
 
 
-@router.post("/prospects/{prospect_id}/approve", response_model=ApproveActionResponse)
-async def approve_action(prospect_id: str, deps: Dict = Depends(get_recall_deps)):
-    """Approve → Execute → Result → Memory Update → Re-evaluate."""
+@router.post("/prospects/{prospect_id}/execute")
+async def execute_action(prospect_id: str, deps: Dict = Depends(get_recall_deps)):
+    """Approve & Execute, streamed as SSE — one event per step, in the order it
+    actually runs (recall memory -> execute -> re-score), so the UI's agent-chain
+    animation is a literal view of real work instead of a fixed timer. There is no
+    separate "research" step here: research already ran once, at prospect creation."""
     store = deps["store"]
     memory = deps["memory"]
     execution = deps["execution"]
@@ -247,28 +252,45 @@ async def approve_action(prospect_id: str, deps: Dict = Depends(get_recall_deps)
 
     action = prospect["next_best_action"]["action"]
     reason = prospect["next_best_action"]["reason"]
-    facts = memory.get(prospect_id)
 
-    store.add_timeline_event(prospect_id, "User approved", action)
+    async def gen():
+        def sse(payload: Dict) -> str:
+            return f"data: {json.dumps(payload)}\n\n"
 
-    result = execution.execute(action, reason, prospect, _memory_summary(facts))
+        yield sse({"agent": "memory", "status": "running"})
+        facts = await asyncio.to_thread(memory.get, prospect_id)
+        store.add_timeline_event(prospect_id, "User approved", action)
+        yield sse({"agent": "memory", "status": "done", "detail": f"{len(facts)} fact{'s' if len(facts) != 1 else ''} recalled"})
 
-    memory.add(
-        prospect_id,
-        f"Executed action: {action}. Result: {_truncate(result.get('output', ''), 300)}",
-        {"type": "action"},
-    )
-    store.add_timeline_event(prospect_id, "Action executed", _truncate(result.get("output", ""), 120))
-    store.clear_next_best_action(prospect_id)
+        yield sse({"agent": "execution", "status": "running"})
+        result = await asyncio.to_thread(execution.execute, action, reason, prospect, _memory_summary(facts))
+        output = result.get("output", "")
+        await asyncio.to_thread(
+            memory.add,
+            prospect_id,
+            f"Executed action: {action}. Result: {_truncate(output, 300)}",
+            {"type": "action"},
+        )
+        store.add_timeline_event(prospect_id, "Action executed", _truncate(output, 120))
+        store.clear_next_best_action(prospect_id)
+        yield sse({"agent": "execution", "status": "done", "detail": _truncate(output, 60) or "sent"})
 
-    updated = _rescore(prospect_id, deps)
-    full_prospect = Prospect(**updated, memory=_facts_for_prospect(memory, prospect_id))
+        yield sse({"agent": "strategy", "status": "running"})
+        updated = await asyncio.to_thread(_rescore, prospect_id, deps)
+        yield sse({"agent": "strategy", "status": "done", "detail": f"lead score now {updated['lead_score']}"})
 
-    return ApproveActionResponse(
-        prospect=full_prospect,
-        result=result.get("output", ""),
-        executed_by=result.get("provider", "local"),
-    )
+        full_prospect = Prospect(**updated, memory=_facts_for_prospect(memory, prospect_id))
+        yield sse(
+            {
+                "agent": "result",
+                "status": "done",
+                "prospect": json.loads(full_prospect.json()),
+                "result": output,
+                "executed_by": result.get("provider", "local"),
+            }
+        )
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
 
 @router.get("/dashboard", response_model=RecallDashboardResponse)
@@ -302,7 +324,7 @@ async def recall_dashboard(deps: Dict = Depends(get_recall_deps)):
 @router.get("/activity", response_model=List[RecallActivityEvent])
 async def recall_activity(limit: int = 20, deps: Dict = Depends(get_recall_deps)):
     """Real agent activity, not simulated: flattens each prospect's actual
-    timeline (already written by create_prospect/_rescore/approve_action)
+    timeline (already written by create_prospect/_rescore/execute_action)
     into one reverse-chronological feed across the whole pipeline."""
     store = deps["store"]
     prospects = store.list_prospects()

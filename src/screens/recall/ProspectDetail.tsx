@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Check, Loader2 } from 'lucide-react';
-import clsx from 'clsx';
-import { api, type RecallProspect } from '../../services/api';
+import { api, type RecallExecuteAgent, type RecallProspect } from '../../services/api';
 import { Chip, ProgressBar, SectionLabel } from '../../components/ui';
 import { Button } from '../../components/Button';
 import { useUi } from '../../store/useUi';
@@ -15,12 +14,15 @@ const INTENT_CHIP: Record<string, { label: string; tone: Tone }> = {
   unknown: { label: 'WARM', tone: 'yellow' },
 };
 
-const AGENT_STEPS = [
-  { key: 'research', label: 'Research Agent', detail: 'context gathered' },
-  { key: 'memory', label: 'Memory', detail: 'facts recalled' },
-  { key: 'strategy', label: 'Strategy Agent', detail: 'action drafted' },
-  { key: 'execution', label: 'Execution Agent', detail: 'sending' },
-] as const;
+// Order matches what the backend actually does for Approve & Execute — there is no
+// separate "research" step here, since research already ran once at prospect creation.
+const AGENT_STEPS: { key: RecallExecuteAgent; label: string }[] = [
+  { key: 'memory', label: 'Memory' },
+  { key: 'execution', label: 'Execution Agent' },
+  { key: 'strategy', label: 'Strategy Agent' },
+];
+
+type StepStatus = 'pending' | 'running' | 'done';
 
 function confidenceLabel(c: number | null | undefined): string {
   if (c == null) return 'Medium';
@@ -46,8 +48,7 @@ export function ProspectDetail() {
   const [prospect, setProspect] = useState<RecallProspect | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
-  const [agentStep, setAgentStep] = useState(-1);
-  const [done, setDone] = useState(false);
+  const [steps, setSteps] = useState<Record<string, { status: StepStatus; detail?: string }>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -57,31 +58,20 @@ export function ProspectDetail() {
   const handleExecute = async () => {
     if (!id) return;
     setExecuting(true);
-    setAgentStep(0);
+    setSteps({});
 
-    const stagePromise = new Promise<void>((resolve) => {
-      let i = 0;
-      const tick = () => {
-        i += 1;
-        setAgentStep(i);
-        if (i < AGENT_STEPS.length - 1) window.setTimeout(tick, 700);
-        else resolve();
-      };
-      window.setTimeout(tick, 700);
-    });
-
-    const [result] = await Promise.all([
-      api.recall.approve(id).catch(() => null),
-      stagePromise,
-    ]);
-
-    setAgentStep(AGENT_STEPS.length);
-    setDone(true);
-    if (result) {
-      setProspect(result.prospect);
-      showToast('Outreach sent · memory updated');
-    } else {
+    try {
+      await api.recall.execute(id, (event) => {
+        if (event.agent === 'result') {
+          setProspect(event.prospect);
+          showToast('Outreach sent · memory updated');
+          return;
+        }
+        setSteps((prev) => ({ ...prev, [event.agent]: { status: event.status, detail: event.detail } }));
+      });
+    } catch {
       showToast('Could not execute — try again');
+      setExecuting(false);
     }
   };
 
@@ -160,27 +150,30 @@ export function ProspectDetail() {
             </div>
           ) : (
             <div className="mt-4 flex flex-col gap-3">
-              {AGENT_STEPS.map((step, i) => (
-                <div
-                  key={step.key}
-                  className={clsx('flex items-center justify-between text-[13.5px] transition-opacity', i > agentStep && 'opacity-32')}
-                  style={{ opacity: i > agentStep ? 0.32 : 1 }}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {i < agentStep || (done && i <= agentStep) ? (
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full text-white" style={{ background: 'var(--color-blue)' }}>
-                        <Check size={12} strokeWidth={3} />
-                      </span>
-                    ) : i === agentStep && !done ? (
-                      <Loader2 size={18} className="animate-spin text-[var(--color-blue)]" />
-                    ) : (
-                      <span className="h-5 w-5 rounded-full border border-[var(--color-line)]" />
-                    )}
-                    <span className="text-[var(--color-ink)]">{step.label}</span>
+              {AGENT_STEPS.map((step) => {
+                const s = steps[step.key] ?? { status: 'pending' as StepStatus };
+                return (
+                  <div
+                    key={step.key}
+                    className="flex items-center justify-between text-[13.5px] transition-opacity"
+                    style={{ opacity: s.status === 'pending' ? 0.32 : 1 }}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {s.status === 'done' ? (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-white" style={{ background: 'var(--color-blue)' }}>
+                          <Check size={12} strokeWidth={3} />
+                        </span>
+                      ) : s.status === 'running' ? (
+                        <Loader2 size={18} className="animate-spin text-[var(--color-blue)]" />
+                      ) : (
+                        <span className="h-5 w-5 rounded-full border border-[var(--color-line)]" />
+                      )}
+                      <span className="text-[var(--color-ink)]">{step.label}</span>
+                    </div>
+                    {s.status !== 'pending' && <span className="text-[var(--color-ink-3)]">{s.detail ?? 'working…'}</span>}
                   </div>
-                  {i <= agentStep && <span className="text-[var(--color-ink-3)]">{step.detail}</span>}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
