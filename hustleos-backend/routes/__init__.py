@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from . import voice, opportunities, dashboard, memory, recall, tasks, capture, workspaces, integrations
+from . import voice, opportunities, dashboard, memory, recall, tasks, capture, workspaces, integrations, team
 
 def create_router():
     router = APIRouter()
@@ -13,5 +13,6 @@ def create_router():
     router.include_router(capture.router, prefix="/capture", tags=["capture"])
     router.include_router(workspaces.router, tags=["workspaces"])
     router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
+    router.include_router(team.router, prefix="/team", tags=["team"])
 
     return router

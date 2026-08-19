@@ -10,6 +10,11 @@ from .execution_agent import ExecutionAgent
 from .task_store import TaskStore
 from .workspace_store import WorkspaceStore
 from .integration_store import IntegrationStore
+from .team_repository import TeamRepository, get_team_repository
+from .team_store import TeamStore
+from .capacity_agent import CapacityAgent
+from .recommendation_agent import RecommendationAgent
+from .team_action_agent import TeamActionAgent
 
 __all__ = [
     "MemoryAgent",
@@ -24,4 +29,10 @@ __all__ = [
     "TaskStore",
     "WorkspaceStore",
     "IntegrationStore",
+    "TeamRepository",
+    "get_team_repository",
+    "TeamStore",
+    "CapacityAgent",
+    "RecommendationAgent",
+    "TeamActionAgent",
 ]

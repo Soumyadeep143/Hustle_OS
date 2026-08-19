@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ChevronLeft, Check, Loader2 } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { api, type RecallExecuteAgent, type RecallProspect } from '../../services/api';
-import { Chip, ProgressBar, SectionLabel } from '../../components/ui';
+import { AgentStepList, Chip, ProgressBar, SectionLabel, type AgentStepStatus } from '../../components/ui';
 import { Button } from '../../components/Button';
 import { useUi } from '../../store/useUi';
 import type { Tone } from '../../lib/types';
@@ -21,8 +21,6 @@ const AGENT_STEPS: { key: RecallExecuteAgent; label: string }[] = [
   { key: 'execution', label: 'Execution Agent' },
   { key: 'strategy', label: 'Strategy Agent' },
 ];
-
-type StepStatus = 'pending' | 'running' | 'done';
 
 function confidenceLabel(c: number | null | undefined): string {
   if (c == null) return 'Medium';
@@ -48,7 +46,7 @@ export function ProspectDetail() {
   const [prospect, setProspect] = useState<RecallProspect | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [executing, setExecuting] = useState(false);
-  const [steps, setSteps] = useState<Record<string, { status: StepStatus; detail?: string }>>({});
+  const [steps, setSteps] = useState<Record<string, { status: AgentStepStatus; detail?: string }>>({});
 
   useEffect(() => {
     if (!id) return;
@@ -149,31 +147,8 @@ export function ProspectDetail() {
               <Button variant="outline">Edit</Button>
             </div>
           ) : (
-            <div className="mt-4 flex flex-col gap-3">
-              {AGENT_STEPS.map((step) => {
-                const s = steps[step.key] ?? { status: 'pending' as StepStatus };
-                return (
-                  <div
-                    key={step.key}
-                    className="flex items-center justify-between text-[13.5px] transition-opacity"
-                    style={{ opacity: s.status === 'pending' ? 0.32 : 1 }}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      {s.status === 'done' ? (
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full text-white" style={{ background: 'var(--color-blue)' }}>
-                          <Check size={12} strokeWidth={3} />
-                        </span>
-                      ) : s.status === 'running' ? (
-                        <Loader2 size={18} className="animate-spin text-[var(--color-blue)]" />
-                      ) : (
-                        <span className="h-5 w-5 rounded-full border border-[var(--color-line)]" />
-                      )}
-                      <span className="text-[var(--color-ink)]">{step.label}</span>
-                    </div>
-                    {s.status !== 'pending' && <span className="text-[var(--color-ink-3)]">{s.detail ?? 'working…'}</span>}
-                  </div>
-                );
-              })}
+            <div className="mt-4">
+              <AgentStepList steps={AGENT_STEPS} state={steps} />
             </div>
           )}
         </div>

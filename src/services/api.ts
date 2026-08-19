@@ -37,6 +37,31 @@ apiClient.interceptors.response.use(
   }
 );
 
+async function consumeSSE<T>(url: string, onEvent: (event: T) => void): Promise<void> {
+  const res = await fetch(url, { method: 'POST' });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error((data as { detail?: string } | null)?.detail || `Request failed (${res.status})`);
+  }
+  if (!res.body) throw new Error('Streaming is not supported in this browser');
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() ?? '';
+    for (const chunk of events) {
+      const line = chunk.split('\n').find((l) => l.startsWith('data: '));
+      if (!line) continue;
+      onEvent(JSON.parse(line.slice(6)) as T);
+    }
+  }
+}
+
 export function getErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     if (error.code === 'ECONNABORTED') return 'Request timed out. Please try again.';
@@ -258,16 +283,6 @@ export interface CaptureCommitResponse {
   title: string;
 }
 
-export interface TeamSprintResponse {
-  name: string;
-  percent: number;
-  done: number;
-  total: number;
-  blocked: { task: string; owner: string }[];
-  members: { name: string; role: string; status: 'Blocked' | 'Available' | 'Busy' }[];
-  recommendation: { text: string; actions: string[] };
-}
-
 export interface OrgHealthResponse {
   execution_health: number;
   delta: string;
@@ -275,12 +290,197 @@ export interface OrgHealthResponse {
   insight_lines: { text: string; tone?: string | null }[];
 }
 
+// ---- Team execution intelligence ----
+
+export interface WorkingHours {
+  days: string[];
+  start: string;
+  end: string;
+  timezone: string;
+}
+
+export type AvailabilityStatus = 'available' | 'busy' | 'partially_available' | 'pto' | 'away';
+
+export interface AvailabilityException {
+  id: string;
+  date: string;
+  status: AvailabilityStatus;
+  start_time?: string | null;
+  end_time?: string | null;
+  note?: string | null;
+}
+
+export type WorkloadState = 'under' | 'optimal' | 'overloaded';
+export type RiskLevel = 'unknown' | 'low' | 'medium' | 'high';
+export type EstimateConfidence = 'high' | 'medium' | 'low';
+
+export interface TeamMember {
+  id: string;
+  team_id: string;
+  name: string;
+  role: string;
+  email?: string | null;
+  skills: string[];
+  capacity_hours_per_week: number;
+  working_hours: WorkingHours;
+  availability_exceptions: AvailabilityException[];
+  created_at: string;
+  updated_at: string;
+  capacity_hours: number;
+  assigned_hours: number;
+  remaining_capacity: number;
+  workload_ratio: number;
+  workload_state: WorkloadState;
+  unestimated_open_task_count: number;
+  blocked_task_count: number;
+  current_availability: AvailabilityStatus;
+}
+
+export type TeamTaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
+
+export interface TeamTaskDto {
+  id: string;
+  organization_id: string;
+  team_id: string;
+  project_id?: string | null;
+  feature_id?: string | null;
+  sprint_id?: string | null;
+  title: string;
+  description?: string | null;
+  assignee_id?: string | null;
+  required_skills: string[];
+  status: TeamTaskStatus;
+  dependencies: string[];
+  estimate_hours?: number | null;
+  actual_hours?: number | null;
+  due_at?: string | null;
+  priority: 'normal' | 'urgent';
+  blocked_reason?: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+  is_blocked: boolean;
+  blocking_on: string[];
+  downstream_impact: string[];
+}
+
+export interface TeamFeature {
+  id: string;
+  team_id: string;
+  project_id: string;
+  name: string;
+  description?: string | null;
+  status: 'planned' | 'active' | 'completed';
+  due_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  percent: number;
+  done: number;
+  total: number;
+  blocked_count: number;
+  blocking_tasks: string[];
+  risk_level: RiskLevel;
+  remaining_hours: number;
+  available_capacity_hours: number;
+  estimate_confidence: EstimateConfidence;
+  basis: string;
+}
+
 export interface TeamProject {
   id: string;
+  organization_id: string;
+  team_id: string;
   name: string;
+  description?: string | null;
+  status: 'active' | 'on_hold' | 'completed';
+  target_date?: string | null;
+  created_at: string;
+  updated_at: string;
   percent: number;
-  meta: string;
-  at_risk: boolean;
+  done: number;
+  total: number;
+  at_risk_feature_count: number;
+  open_blockers: number;
+  risk_level: RiskLevel;
+  remaining_hours: number;
+  available_capacity_hours: number;
+  estimate_confidence: EstimateConfidence;
+  basis: string;
+}
+
+export interface TeamSprint {
+  id: string;
+  team_id: string;
+  name: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  status: 'planned' | 'active' | 'completed';
+  created_at: string;
+  updated_at: string;
+  percent: number;
+  done: number;
+  total: number;
+}
+
+export type TeamActionType = 'reassign_task' | 'unblock_task_priority_bump' | 'no_action';
+
+export interface TeamRecommendation {
+  id: string;
+  action_type: TeamActionType;
+  params: Record<string, string>;
+  summary: string;
+  reason: string;
+  generated_at: string;
+}
+
+export interface TeamBottleneck {
+  member_id: string;
+  member_name: string;
+  kind: 'overloaded' | 'blocker_owner';
+  detail: string;
+}
+
+export interface TeamTimelineEventDto {
+  id: string;
+  label: string;
+  detail?: string | null;
+  created_at: string;
+}
+
+export interface TeamStateResponse {
+  team_id: string;
+  team_name: string;
+  members: TeamMember[];
+  tasks: TeamTaskDto[];
+  projects: TeamProject[];
+  features: TeamFeature[];
+  sprints: TeamSprint[];
+  bottlenecks: TeamBottleneck[];
+  current_recommendation?: TeamRecommendation | null;
+  timeline: TeamTimelineEventDto[];
+}
+
+export interface ProjectDetailResponse extends TeamProject {
+  features: TeamFeature[];
+}
+
+export interface FeatureDetailResponse extends TeamFeature {
+  blocking_task_details: TeamTaskDto[];
+  responsible_members: TeamMember[];
+}
+
+export type TeamExecuteAgent = 'validate' | 'action' | 'signals';
+
+export interface TeamExecuteEvent {
+  agent: TeamExecuteAgent;
+  status: 'running' | 'done' | 'error';
+  detail?: string;
+}
+
+export interface TeamExecuteResult {
+  agent: 'result';
+  status: 'done';
+  team: TeamStateResponse;
 }
 
 export interface Integration {
@@ -370,30 +570,7 @@ export const api = {
     execute: async (
       id: string,
       onEvent: (event: RecallExecuteEvent | RecallExecuteResult) => void
-    ): Promise<void> => {
-      const res = await fetch(`${API_URL}/api/recall/prospects/${id}/execute`, { method: 'POST' });
-      if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error((data as { detail?: string } | null)?.detail || `Request failed (${res.status})`);
-      }
-      if (!res.body) throw new Error('Streaming is not supported in this browser');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split('\n\n');
-        buffer = events.pop() ?? '';
-        for (const chunk of events) {
-          const line = chunk.split('\n').find((l) => l.startsWith('data: '));
-          if (!line) continue;
-          onEvent(JSON.parse(line.slice(6)));
-        }
-      }
-    },
+    ): Promise<void> => consumeSSE(`${API_URL}/api/recall/prospects/${id}/execute`, onEvent),
     getDashboard: async (): Promise<RecallDashboardResponse> => {
       const { data } = await apiClient.get<RecallDashboardResponse>('/recall/dashboard');
       return data;
@@ -451,18 +628,103 @@ export const api = {
   },
 
   workspace: {
-    getSprint: async (teamId: string = 'default'): Promise<TeamSprintResponse> => {
-      const { data } = await apiClient.get<TeamSprintResponse>(`/team/${teamId}/sprint`);
-      return data;
-    },
-    getProjects: async (teamId: string = 'default'): Promise<TeamProject[]> => {
-      const { data } = await apiClient.get<TeamProject[]>(`/team/${teamId}/projects`);
-      return data;
-    },
     getOrgHealth: async (): Promise<OrgHealthResponse> => {
       const { data } = await apiClient.get<OrgHealthResponse>('/org/health');
       return data;
     },
+  },
+
+  team: {
+    getState: async (teamId: string = 'default'): Promise<TeamStateResponse> => {
+      const { data } = await apiClient.get<TeamStateResponse>(`/team/${teamId}`);
+      return data;
+    },
+    addMember: async (
+      teamId: string,
+      member: { name: string; role: string; email?: string; skills?: string[]; capacity_hours_per_week?: number }
+    ): Promise<TeamMember> => {
+      const { data } = await apiClient.post<TeamMember>(`/team/${teamId}/members`, member);
+      return data;
+    },
+    updateMember: async (
+      teamId: string,
+      memberId: string,
+      updates: Partial<{ name: string; role: string; skills: string[]; capacity_hours_per_week: number }>
+    ): Promise<TeamMember> => {
+      const { data } = await apiClient.patch<TeamMember>(`/team/${teamId}/members/${memberId}`, updates);
+      return data;
+    },
+    addTask: async (
+      teamId: string,
+      task: {
+        title: string;
+        description?: string;
+        project_id?: string;
+        feature_id?: string;
+        sprint_id?: string;
+        assignee_id?: string;
+        required_skills?: string[];
+        estimate_hours?: number;
+        due_at?: string;
+        priority?: string;
+        dependencies?: string[];
+      }
+    ): Promise<TeamTaskDto> => {
+      const { data } = await apiClient.post<TeamTaskDto>(`/team/${teamId}/tasks`, task);
+      return data;
+    },
+    updateTask: async (
+      teamId: string,
+      taskId: string,
+      updates: Partial<{
+        status: TeamTaskStatus;
+        assignee_id: string;
+        estimate_hours: number;
+        priority: string;
+        blocked_reason: string | null;
+        dependencies: string[];
+      }>
+    ): Promise<TeamTaskDto> => {
+      const { data } = await apiClient.patch<TeamTaskDto>(`/team/${teamId}/tasks/${taskId}`, updates);
+      return data;
+    },
+    addFeature: async (
+      teamId: string,
+      feature: { project_id: string; name: string; description?: string; due_at?: string }
+    ): Promise<TeamFeature> => {
+      const { data } = await apiClient.post<TeamFeature>(`/team/${teamId}/features`, feature);
+      return data;
+    },
+    getFeature: async (teamId: string, featureId: string): Promise<FeatureDetailResponse> => {
+      const { data } = await apiClient.get<FeatureDetailResponse>(`/team/${teamId}/features/${featureId}`);
+      return data;
+    },
+    addProject: async (
+      teamId: string,
+      project: { name: string; description?: string; target_date?: string }
+    ): Promise<TeamProject> => {
+      const { data } = await apiClient.post<TeamProject>(`/team/${teamId}/projects`, project);
+      return data;
+    },
+    getProject: async (teamId: string, projectId: string): Promise<ProjectDetailResponse> => {
+      const { data } = await apiClient.get<ProjectDetailResponse>(`/team/${teamId}/projects/${projectId}`);
+      return data;
+    },
+    addSprint: async (
+      teamId: string,
+      sprint: { name: string; start_date?: string; end_date?: string }
+    ): Promise<TeamSprint> => {
+      const { data } = await apiClient.post<TeamSprint>(`/team/${teamId}/sprints`, sprint);
+      return data;
+    },
+    generateRecommendation: async (teamId: string): Promise<TeamRecommendation> => {
+      const { data } = await apiClient.post<TeamRecommendation>(`/team/${teamId}/recommendation/generate`);
+      return data;
+    },
+    executeRecommendation: async (
+      teamId: string,
+      onEvent: (event: TeamExecuteEvent | TeamExecuteResult) => void
+    ): Promise<void> => consumeSSE(`${API_URL}/api/team/${teamId}/recommendation/execute`, onEvent),
   },
 
   integrations: {

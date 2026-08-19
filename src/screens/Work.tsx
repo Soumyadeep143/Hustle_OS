@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api, type MemoryResponse, type Application, type TeamProject } from '../services/api';
 import { useUi } from '../store/useUi';
 import { UnderlineTabs, TaskRow, ProgressBar, Chip } from '../components/ui';
 import type { Tone } from '../lib/types';
+
+const RISK_TONE: Record<string, 'red' | 'blue' | 'yellow'> = { high: 'red', medium: 'yellow', low: 'blue', unknown: 'blue' };
 
 const STATUS_CHIP: Record<string, { label: string; tone: Tone }> = {
   interview: { label: 'INTERVIEW', tone: 'blue' },
@@ -20,6 +23,7 @@ function chipFor(app: Application): { label: string; tone: Tone } {
 }
 
 export function Work() {
+  const navigate = useNavigate();
   const workTab = useUi((s) => s.workTab);
   const setWorkTab = useUi((s) => s.setWorkTab);
   const tasks = useUi((s) => s.tasks);
@@ -29,7 +33,7 @@ export function Work() {
 
   useEffect(() => {
     api.memory.get().then(setMemory);
-    api.workspace.getProjects().then(setProjects);
+    api.team.getState('default').then((state) => setProjects(state.projects));
   }, []);
 
   const openTasks = tasks.filter((t) => !t.done).length;
@@ -96,17 +100,20 @@ export function Work() {
       {workTab === 'Projects' && (
         <div className="flex flex-col gap-4">
           {projects.map((p) => (
-            <div key={p.id}>
+            <button key={p.id} onClick={() => navigate(`/team/projects/${p.id}`)} className="text-left">
               <div className="flex items-center justify-between">
                 <span className="text-[15.5px] font-medium text-[var(--color-ink)]">{p.name}</span>
                 <span className="font-[var(--font-mono)] text-[12px] text-[var(--color-ink-2)]">{p.percent}%</span>
               </div>
-              <p className="mt-0.5 text-[12.5px] text-[var(--color-ink-2)]">{p.meta}</p>
+              <p className="mt-0.5 text-[12.5px] text-[var(--color-ink-2)]">
+                {p.done} of {p.total} tasks · {p.risk_level === 'unknown' ? 'no deadline' : `${p.risk_level} risk`}
+              </p>
               <div className="mt-2">
-                <ProgressBar percent={p.percent} tone={p.at_risk ? 'red' : 'blue'} />
+                <ProgressBar percent={p.percent} tone={RISK_TONE[p.risk_level]} />
               </div>
-            </div>
+            </button>
           ))}
+          {projects.length === 0 && <p className="py-4 text-[13px] text-[var(--color-ink-2)]">No projects yet.</p>}
         </div>
       )}
     </div>

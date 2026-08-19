@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { api, type DashboardResponse, type MemoryResponse, type OrgHealthResponse, type TeamSprintResponse } from '../services/api';
+import { api, type DashboardResponse, type MemoryResponse, type OrgHealthResponse, type TeamStateResponse } from '../services/api';
 import { briefFromDashboard, timelineFromDashboard } from '../lib/adapters';
 import { useUi } from '../store/useUi';
-import { SectionLabel, TimelineRow, TaskRow, ProgressBar, Chip } from '../components/ui';
+import { SectionLabel, TimelineRow, TaskRow, ProgressBar, Chip, StatCell } from '../components/ui';
 
 function useClock() {
   const [now, setNow] = useState(new Date());
@@ -146,93 +146,65 @@ function HomePersonal() {
 }
 
 function HomeTeam() {
-  const [sprint, setSprint] = useState<TeamSprintResponse | null>(null);
-  const STATUS_TONE = { Blocked: 'var(--color-red)', Available: 'var(--color-blue)', Busy: 'var(--color-ink-3)' } as const;
+  const navigate = useNavigate();
+  const [state, setState] = useState<TeamStateResponse | null>(null);
 
   useEffect(() => {
-    api.workspace.getSprint().then(setSprint);
+    api.team.getState('default').then(setState);
   }, []);
 
-  if (!sprint) {
+  if (!state) {
     return <div className="h-40 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-line-2)]" />;
   }
+
+  const totalCapacity = state.members.reduce((sum, m) => sum + m.capacity_hours, 0);
+  const totalAssigned = state.members.reduce((sum, m) => sum + m.assigned_hours, 0);
+  const capacityPercent = totalCapacity > 0 ? Math.round((totalAssigned / totalCapacity) * 100) : 0;
+  const activeTasks = state.tasks.filter((t) => t.status !== 'done').length;
+  const blockedTasks = state.tasks.filter((t) => t.is_blocked).length;
+  const atRiskProjects = state.projects.filter((p) => p.risk_level === 'medium' || p.risk_level === 'high').length;
+  const topBottleneck = state.bottlenecks[0];
 
   return (
     <>
       <div>
-        <h1 className="font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">{sprint.name}</h1>
-        <div className="mt-3 flex items-end justify-between">
-          <span className="font-[var(--font-display)] text-[46px] font-semibold leading-none tracking-[-.03em] text-[var(--color-ink)]">
-            {sprint.percent}%
-          </span>
-          <span className="pb-1 text-right text-[13px] text-[var(--color-ink-2)]">
-            complete
-            <br />
-            {sprint.done} of {sprint.total} tasks
-          </span>
-        </div>
-        <div className="mt-3">
-          <ProgressBar percent={sprint.percent} height={4} />
+        <h1 className="font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">{state.team_name}</h1>
+        <div className="mt-4 grid grid-cols-3 gap-4">
+          <StatCell value={`${capacityPercent}%`} label="Team capacity" />
+          <StatCell value={state.members.length} label="Members" />
+          <StatCell value={activeTasks} label="Active tasks" />
+          <StatCell value={blockedTasks} label="Blocked" tone={blockedTasks > 0 ? 'red' : 'neutral'} />
+          <StatCell value={atRiskProjects} label="At risk" tone={atRiskProjects > 0 ? 'yellow' : 'neutral'} />
         </div>
       </div>
 
-      {sprint.blocked.length > 0 && (
+      {topBottleneck && (
         <div className="rounded-[var(--radius-card)] p-4" style={{ background: 'var(--color-red-soft)' }}>
           <div className="flex items-center gap-2">
-            <span className="font-[var(--font-display)] text-[22px] font-semibold text-[var(--color-red)]">
-              {sprint.blocked.length}
-            </span>
-            <Chip tone="red">BLOCKED</Chip>
+            <Chip tone="red">{topBottleneck.kind === 'overloaded' ? 'OVERLOADED' : 'BLOCKER'}</Chip>
           </div>
-          <div className="mt-2 flex flex-col gap-1">
-            {sprint.blocked.map((b) => (
-              <p key={b.task} className="text-[13.5px] text-[var(--color-ink)]">
-                {b.task} <span className="text-[var(--color-ink-2)]">· {b.owner}</span>
-              </p>
-            ))}
-          </div>
+          <p className="mt-2 text-[13.5px] text-[var(--color-ink)]">
+            <span className="font-medium">{topBottleneck.member_name}</span> — {topBottleneck.detail}
+          </p>
         </div>
       )}
 
-      <div>
-        <SectionLabel>TEAM AVAILABILITY</SectionLabel>
-        <div className="mt-3 flex flex-col">
-          {sprint.members.map((m) => (
-            <div key={m.name} className="flex items-center gap-3 border-b border-[var(--color-line-2)] py-3 last:border-b-0">
-              <div
-                className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] text-[12px] font-semibold text-white"
-                style={{ background: 'var(--color-ink-3)' }}
-              >
-                {m.name.split(' ').map((p) => p[0]).join('')}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[14.5px] font-medium text-[var(--color-ink)]">{m.name}</div>
-                <div className="truncate text-[12.5px] text-[var(--color-ink-2)]">{m.role}</div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: STATUS_TONE[m.status] }} />
-                <span className="text-[12px] text-[var(--color-ink-2)]">{m.status}</span>
-              </div>
-            </div>
-          ))}
+      {state.current_recommendation && (
+        <div
+          className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4"
+          style={{ boxShadow: 'var(--shadow-card)' }}
+        >
+          <span className="text-[11px] font-semibold tracking-[.18em] text-[var(--color-blue)]">✦ AI RECOMMENDATION</span>
+          <p className="mt-2 text-[14.5px] leading-relaxed text-[var(--color-ink)]">{state.current_recommendation.summary}</p>
         </div>
-      </div>
+      )}
 
-      <div
-        className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4"
-        style={{ boxShadow: 'var(--shadow-card)' }}
+      <button
+        onClick={() => navigate('/team')}
+        className="flex items-center justify-center gap-1.5 rounded-[var(--radius-control)] border border-[var(--color-line)] py-3 text-[13.5px] font-semibold text-[var(--color-blue)]"
       >
-        <span className="text-[11px] font-semibold tracking-[.18em] text-[var(--color-blue)]">✦ AI RECOMMENDATION</span>
-        <p className="mt-2 text-[14.5px] leading-relaxed text-[var(--color-ink)]">{sprint.recommendation.text}</p>
-        <div className="mt-3 flex gap-2">
-          <button className="flex-1 rounded-[var(--radius-control)] px-4 py-2 text-[13px] font-semibold text-white" style={{ background: 'var(--color-blue)' }}>
-            Review
-          </button>
-          <button className="rounded-[var(--radius-control)] border border-[var(--color-blue)] px-4 py-2 text-[13px] font-semibold text-[var(--color-blue)]">
-            Later
-          </button>
-        </div>
-      </div>
+        View full team →
+      </button>
     </>
   );
 }
