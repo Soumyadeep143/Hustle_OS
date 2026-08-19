@@ -1,18 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { api, type MemoryResponse } from '../services/api';
+import { api, type Integration, type MemoryResponse } from '../services/api';
 import { useUi, type Workspace } from '../store/useUi';
 import { SectionLabel, SegmentedControl } from '../components/ui';
 import { Button } from '../components/Button';
-
-const INTEGRATIONS = [
-  { key: 'gmail', name: 'Gmail', connected: true },
-  { key: 'calendar', name: 'Calendar', connected: true },
-  { key: 'linkedin', name: 'LinkedIn', connected: true },
-  { key: 'github', name: 'GitHub', connected: true },
-  { key: 'notion', name: 'Notion', connected: false },
-];
 
 const WORKSPACES: Workspace[] = ['Personal', 'Team', 'Enterprise'];
 
@@ -24,11 +16,27 @@ export function Profile() {
   const setWorkspace = useUi((s) => s.setWorkspace);
   const [memory, setMemory] = useState<MemoryResponse | null>(null);
   const [prospectCount, setProspectCount] = useState(0);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [connecting, setConnecting] = useState<string | null>(null);
+  const showToast = useUi((s) => s.showToast);
 
   useEffect(() => {
     api.memory.get().then(setMemory);
     api.recall.getDashboard().then((d) => setProspectCount(d.total_prospects)).catch(() => {});
+    api.integrations.list().then(setIntegrations).catch(() => {});
   }, []);
+
+  const handleConnect = async (key: string) => {
+    setConnecting(key);
+    try {
+      const updated = await api.integrations.connect(key);
+      setIntegrations((prev) => prev.map((i) => (i.key === key ? { ...i, connected: updated.connected } : i)));
+    } catch {
+      showToast('Could not connect — try again');
+    } finally {
+      setConnecting(null);
+    }
+  };
 
   const memoryCount = (memory ? memory.applications.length + memory.insights.length : 0) + prospectCount;
 
@@ -87,13 +95,19 @@ export function Profile() {
       <div>
         <SectionLabel>INTEGRATIONS</SectionLabel>
         <div className="mt-3 flex flex-col">
-          {INTEGRATIONS.map((i) => (
+          {integrations.map((i) => (
             <div key={i.key} className="flex items-center justify-between border-b border-[var(--color-line-2)] py-3 last:border-b-0">
               <span className="text-[14.5px] text-[var(--color-ink)]">{i.name}</span>
               {i.connected ? (
                 <span className="text-[12.5px] font-medium text-[var(--color-blue)]">Connected</span>
               ) : (
-                <span className="text-[12.5px] font-medium text-[var(--color-ink-3)]">Connect</span>
+                <button
+                  onClick={() => handleConnect(i.key)}
+                  disabled={connecting === i.key}
+                  className="text-[12.5px] font-medium text-[var(--color-ink-3)] disabled:opacity-50"
+                >
+                  {connecting === i.key ? 'Connecting…' : 'Connect'}
+                </button>
               )}
             </div>
           ))}
@@ -112,15 +126,7 @@ export function Profile() {
         </p>
       </div>
 
-      <Button
-        variant="danger"
-        fullWidth
-        onClick={() => {
-          localStorage.removeItem('hustleos-tasks');
-          localStorage.removeItem('hustleos-captured');
-          navigate('/');
-        }}
-      >
+      <Button variant="danger" fullWidth onClick={() => navigate('/')}>
         Sign out
       </Button>
     </div>

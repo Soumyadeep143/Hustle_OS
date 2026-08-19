@@ -7,6 +7,9 @@ from .recall_store import RecallStore
 from .research_agent import ResearchAgent
 from .strategy_agent import StrategyAgent
 from .execution_agent import ExecutionAgent
+from .task_store import TaskStore
+from .workspace_store import WorkspaceStore
+from .integration_store import IntegrationStore
 
 __all__ = [
     "MemoryAgent",
@@ -18,4 +21,7 @@ __all__ = [
     "ResearchAgent",
     "StrategyAgent",
     "ExecutionAgent",
+    "TaskStore",
+    "WorkspaceStore",
+    "IntegrationStore",
 ]

@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -91,6 +92,21 @@ class MemoryAgent:
         self.memory["applications"].append(application)
         self._save_memory()
         return application
+
+    def save_capture(self, kind: str, title: str, org: str, meta: Optional[Dict] = None) -> Dict:
+        """Persist a Quick Capture item that isn't an application or a RECALL
+        prospect (event / article / repo / note / task-adjacent captures)."""
+        item = {
+            "id": f"cap_{uuid.uuid4().hex[:8]}",
+            "kind": kind,
+            "title": title,
+            "org": org,
+            "created_at": datetime.now().isoformat(),
+            **(meta or {}),
+        }
+        self.memory.setdefault("captures", []).append(item)
+        self._save_memory()
+        return item
 
     def update_profile(self, profile: Dict) -> Dict:
         self.memory["user_profile"] = {

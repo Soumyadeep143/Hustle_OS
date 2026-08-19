@@ -217,6 +217,79 @@ export interface RecallActivityEvent {
   created_at: string;
 }
 
+export interface Task {
+  id: string;
+  title: string;
+  meta: string;
+  due_at?: string | null;
+  priority: 'high' | 'normal';
+  done: boolean;
+  created_at: string;
+}
+
+export type CaptureKind = 'job' | 'event' | 'repo' | 'article' | 'prospect' | 'note' | 'task';
+
+export interface CaptureParseResponse {
+  kind: CaptureKind;
+  title: string;
+  org: string;
+  location: string;
+  deadline: string;
+  category: string;
+  confidence: 'High' | 'Medium' | 'Low';
+  fields: string[];
+  source_url: string;
+}
+
+export interface CaptureCommitRequest {
+  kind: Exclude<CaptureKind, 'prospect'>;
+  title: string;
+  org?: string;
+  location?: string;
+  deadline?: string;
+  category?: string;
+  source_url?: string;
+  user_id?: string;
+}
+
+export interface CaptureCommitResponse {
+  kind: string;
+  id: string;
+  title: string;
+}
+
+export interface TeamSprintResponse {
+  name: string;
+  percent: number;
+  done: number;
+  total: number;
+  blocked: { task: string; owner: string }[];
+  members: { name: string; role: string; status: 'Blocked' | 'Available' | 'Busy' }[];
+  recommendation: { text: string; actions: string[] };
+}
+
+export interface OrgHealthResponse {
+  execution_health: number;
+  delta: string;
+  rows: { label: string; value: string; tone?: string | null }[];
+  insight_lines: { text: string; tone?: string | null }[];
+}
+
+export interface TeamProject {
+  id: string;
+  name: string;
+  percent: number;
+  meta: string;
+  at_risk: boolean;
+}
+
+export interface Integration {
+  key: string;
+  name: string;
+  connected: boolean;
+  last_sync?: string | null;
+}
+
 export const api = {
   voice: {
     transcribe: async (audio: Blob): Promise<TranscribeResponse> => {
@@ -334,6 +407,74 @@ export const api = {
         params: { limit },
       });
       return data;
+    },
+  },
+
+  tasks: {
+    list: async (userId: string = DEFAULT_USER_ID): Promise<Task[]> => {
+      const { data } = await apiClient.get<Task[]>('/tasks/', { params: { user_id: userId } });
+      return data;
+    },
+    create: async (
+      title: string,
+      dueAt?: string,
+      priority: 'high' | 'normal' = 'normal',
+      userId: string = DEFAULT_USER_ID
+    ): Promise<Task> => {
+      const { data } = await apiClient.post<Task>('/tasks/', {
+        title,
+        due_at: dueAt,
+        priority,
+        user_id: userId,
+      });
+      return data;
+    },
+    setDone: async (id: string, done: boolean): Promise<Task> => {
+      const { data } = await apiClient.patch<Task>(`/tasks/${id}`, { done });
+      return data;
+    },
+  },
+
+  capture: {
+    parse: async (input: string): Promise<CaptureParseResponse> => {
+      const isUrl = /^https?:\/\//i.test(input.trim());
+      const { data } = await apiClient.post<CaptureParseResponse>('/capture/parse', isUrl ? { url: input } : { text: input });
+      return data;
+    },
+    commit: async (request: CaptureCommitRequest): Promise<CaptureCommitResponse> => {
+      const { data } = await apiClient.post<CaptureCommitResponse>('/capture/commit', {
+        user_id: DEFAULT_USER_ID,
+        ...request,
+      });
+      return data;
+    },
+  },
+
+  workspace: {
+    getSprint: async (teamId: string = 'default'): Promise<TeamSprintResponse> => {
+      const { data } = await apiClient.get<TeamSprintResponse>(`/team/${teamId}/sprint`);
+      return data;
+    },
+    getProjects: async (teamId: string = 'default'): Promise<TeamProject[]> => {
+      const { data } = await apiClient.get<TeamProject[]>(`/team/${teamId}/projects`);
+      return data;
+    },
+    getOrgHealth: async (): Promise<OrgHealthResponse> => {
+      const { data } = await apiClient.get<OrgHealthResponse>('/org/health');
+      return data;
+    },
+  },
+
+  integrations: {
+    list: async (): Promise<Integration[]> => {
+      const { data } = await apiClient.get<Integration[]>('/integrations/');
+      return data;
+    },
+    connect: async (key: string): Promise<Integration> => {
+      const { data } = await apiClient.post<{ key: string; connected: boolean; note: string }>(
+        `/integrations/${key}/connect`
+      );
+      return { key: data.key, name: key, connected: data.connected };
     },
   },
 };

@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Check, Loader2, Mic } from 'lucide-react';
+import { Loader2, Mic } from 'lucide-react';
 import clsx from 'clsx';
 import { Sheet } from '../ui/Sheet';
 import { Button } from '../Button';
 import { useUi } from '../../store/useUi';
-import { parseCapture, commitCapturedLocally, type ParsedCapture, type CaptureKind } from '../../lib/capture';
-import { api } from '../../services/api';
+import { api, type CaptureKind, type CaptureParseResponse } from '../../services/api';
 
 type Phase = 'idle' | 'processing' | 'result';
 
@@ -18,8 +17,6 @@ const MANUAL_KINDS: { kind: CaptureKind; label: string; tone: string }[] = [
   { kind: 'prospect', label: 'Add prospect', tone: 'var(--color-red)' },
 ];
 
-const STEPS = ['Extracting context', 'Identifying category', 'Finding important dates', 'Creating memory'];
-
 export function CaptureSheet() {
   const sheet = useUi((s) => s.sheet);
   const closeSheet = useUi((s) => s.closeSheet);
@@ -29,17 +26,17 @@ export function CaptureSheet() {
 
   const [text, setText] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
-  const [stepIndex, setStepIndex] = useState(0);
-  const [result, setResult] = useState<ParsedCapture | null>(null);
+  const [result, setResult] = useState<CaptureParseResponse | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const open = sheet === 'capture';
 
   const reset = () => {
     setText('');
     setPhase('idle');
-    setStepIndex(0);
     setResult(null);
+    setError(null);
   };
 
   const handleClose = () => {
@@ -47,24 +44,18 @@ export function CaptureSheet() {
     reset();
   };
 
-  const runAnalyze = (input: string) => {
+  const runAnalyze = async (input: string) => {
     if (!input.trim()) return;
     setPhase('processing');
-    setStepIndex(0);
-    let i = 0;
-    const tick = () => {
-      i += 1;
-      setStepIndex(i);
-      if (i < STEPS.length) {
-        window.setTimeout(tick, 650);
-      } else {
-        window.setTimeout(() => {
-          setResult(parseCapture(input));
-          setPhase('result');
-        }, 300);
-      }
-    };
-    window.setTimeout(tick, 650);
+    setError(null);
+    try {
+      const parsed = await api.capture.parse(input);
+      setResult(parsed);
+      setPhase('result');
+    } catch {
+      setError('Could not analyze that — try again or capture manually.');
+      setPhase('idle');
+    }
   };
 
   const handleManualCapture = (kind: CaptureKind) => {
@@ -76,7 +67,8 @@ export function CaptureSheet() {
       deadline: '',
       category: '',
       confidence: 'Low',
-      sourceUrl: '',
+      fields: [],
+      source_url: '',
     });
     setPhase('result');
   };
@@ -89,17 +81,23 @@ export function CaptureSheet() {
         await api.recall.createProspect({
           name: result.title || 'Untitled prospect',
           company: result.org || 'Unknown',
-          source_url: result.sourceUrl || undefined,
+          source_url: result.source_url || undefined,
         });
         showToast('Saved to RECALL · Prospects');
       } else if (result.kind === 'task') {
-        addTask(result.title || 'Untitled task', result.deadline || 'Today', 'normal');
+        await addTask(result.title || 'Untitled task', result.deadline || undefined, 'normal');
         showToast('Saved to Work · Tasks');
       } else {
-        commitCapturedLocally(result.kind, result.title || 'Untitled', result.org);
-        showToast(
-          result.kind === 'job' ? 'Saved to Work · Applications' : 'Saved to your memory'
-        );
+        await api.capture.commit({
+          kind: result.kind,
+          title: result.title || 'Untitled',
+          org: result.org,
+          location: result.location,
+          deadline: result.deadline,
+          category: result.category,
+          source_url: result.source_url,
+        });
+        showToast(result.kind === 'job' ? 'Saved to Work · Applications' : 'Saved to your memory');
       }
       handleClose();
     } catch {
@@ -128,6 +126,8 @@ export function CaptureSheet() {
               className="flex-1 bg-transparent text-[14px] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-3)]"
             />
           </div>
+
+          {error && <p className="text-[13px] text-[var(--color-red)]">{error}</p>}
 
           <div className="flex gap-2">
             <Button variant="primary" className="flex-1" onClick={() => runAnalyze(text)}>
@@ -172,35 +172,15 @@ export function CaptureSheet() {
       )}
 
       {phase === 'processing' && (
-        <div className="flex flex-col gap-5 py-2">
-          <div>
+        <div className="flex flex-col items-center gap-4 py-10">
+          <Loader2 size={28} className="animate-spin text-[var(--color-blue)]" />
+          <div className="text-center">
             <div className="text-[15px] font-medium text-[var(--color-ink)]">Analyzing link…</div>
             {text && (
               <div className="mt-1 truncate font-[var(--font-mono)] text-[12px] text-[var(--color-ink-3)]">
                 {text}
               </div>
             )}
-          </div>
-          <div className="flex flex-col gap-3">
-            {STEPS.map((step, i) => (
-              <div key={step} className="flex items-center gap-3 text-[14px]">
-                {i < stepIndex ? (
-                  <span
-                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white"
-                    style={{ background: 'var(--color-blue)' }}
-                  >
-                    <Check size={12} strokeWidth={3} />
-                  </span>
-                ) : i === stepIndex ? (
-                  <Loader2 size={20} className="shrink-0 animate-spin text-[var(--color-blue)]" />
-                ) : (
-                  <span className="h-5 w-5 shrink-0 rounded-full border border-[var(--color-line)]" />
-                )}
-                <span className={clsx(i <= stepIndex ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-3)]')}>
-                  {step}
-                </span>
-              </div>
-            ))}
           </div>
         </div>
       )}

@@ -23,6 +23,24 @@ from .recall_schemas import (
     RecallQueryResponse,
     RecallActivityEvent,
 )
+from .task_schemas import Task, TaskCreateRequest, TaskUpdateRequest
+from .capture_schemas import (
+    CaptureParseRequest,
+    CaptureParseResponse,
+    CaptureCommitRequest,
+    CaptureCommitResponse,
+)
+from .workspace_schemas import (
+    BlockedTask,
+    TeamMember,
+    SprintRecommendation,
+    TeamSprintResponse,
+    OrgHealthRow,
+    OrgInsightLine,
+    OrgHealthResponse,
+    TeamProject,
+)
+from .integration_schemas import Integration, IntegrationConnectResponse
 
 __all__ = [
     "VoiceTranscribeRequest",
@@ -46,4 +64,21 @@ __all__ = [
     "RecallQueryRequest",
     "RecallQueryResponse",
     "RecallActivityEvent",
+    "Task",
+    "TaskCreateRequest",
+    "TaskUpdateRequest",
+    "CaptureParseRequest",
+    "CaptureParseResponse",
+    "CaptureCommitRequest",
+    "CaptureCommitResponse",
+    "BlockedTask",
+    "TeamMember",
+    "SprintRecommendation",
+    "TeamSprintResponse",
+    "OrgHealthRow",
+    "OrgInsightLine",
+    "OrgHealthResponse",
+    "TeamProject",
+    "Integration",
+    "IntegrationConnectResponse",
 ]

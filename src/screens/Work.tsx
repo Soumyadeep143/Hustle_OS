@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api, type MemoryResponse, type Application } from '../services/api';
-import { getProjects } from '../lib/seed';
+import { api, type MemoryResponse, type Application, type TeamProject } from '../services/api';
 import { useUi } from '../store/useUi';
 import { UnderlineTabs, TaskRow, ProgressBar, Chip } from '../components/ui';
 import type { Tone } from '../lib/types';
@@ -9,6 +8,7 @@ const STATUS_CHIP: Record<string, { label: string; tone: Tone }> = {
   interview: { label: 'INTERVIEW', tone: 'blue' },
   reviewing: { label: 'REVIEWING', tone: 'yellow' },
   applied: { label: 'APPLIED', tone: 'neutral' },
+  captured: { label: 'CAPTURED', tone: 'yellow' },
 };
 
 function chipFor(app: Application): { label: string; tone: Tone } {
@@ -25,10 +25,11 @@ export function Work() {
   const tasks = useUi((s) => s.tasks);
   const toggleTask = useUi((s) => s.toggleTask);
   const [memory, setMemory] = useState<MemoryResponse | null>(null);
-  const projects = getProjects();
+  const [projects, setProjects] = useState<TeamProject[]>([]);
 
   useEffect(() => {
     api.memory.get().then(setMemory);
+    api.workspace.getProjects().then(setProjects);
   }, []);
 
   const openTasks = tasks.filter((t) => !t.done).length;
@@ -102,7 +103,7 @@ export function Work() {
               </div>
               <p className="mt-0.5 text-[12.5px] text-[var(--color-ink-2)]">{p.meta}</p>
               <div className="mt-2">
-                <ProgressBar percent={p.percent} tone={p.atRisk ? 'red' : 'blue'} />
+                <ProgressBar percent={p.percent} tone={p.at_risk ? 'red' : 'blue'} />
               </div>
             </div>
           ))}

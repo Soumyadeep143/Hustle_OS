@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { api, type DashboardResponse, type MemoryResponse } from '../services/api';
+import { api, type DashboardResponse, type MemoryResponse, type OrgHealthResponse, type TeamSprintResponse } from '../services/api';
 import { briefFromDashboard, timelineFromDashboard } from '../lib/adapters';
-import { getTeamSprint, getOrgHealth } from '../lib/seed';
 import { useUi } from '../store/useUi';
 import { SectionLabel, TimelineRow, TaskRow, ProgressBar, Chip } from '../components/ui';
 
@@ -54,15 +53,12 @@ function HomePersonal() {
   const [memory, setMemory] = useState<MemoryResponse | null>(null);
   const tasks = useUi((s) => s.tasks);
   const toggleTask = useUi((s) => s.toggleTask);
-  const seedTasks = useUi((s) => s.seedTasks);
 
   useEffect(() => {
     Promise.all([api.dashboard.get(), api.memory.get()]).then(([d, m]) => {
       setDashboard(d);
       setMemory(m);
-      seedTasks(d.priorities);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const brief = dashboard ? briefFromDashboard(dashboard) : null;
@@ -150,8 +146,16 @@ function HomePersonal() {
 }
 
 function HomeTeam() {
-  const sprint = getTeamSprint();
+  const [sprint, setSprint] = useState<TeamSprintResponse | null>(null);
   const STATUS_TONE = { Blocked: 'var(--color-red)', Available: 'var(--color-blue)', Busy: 'var(--color-ink-3)' } as const;
+
+  useEffect(() => {
+    api.workspace.getSprint().then(setSprint);
+  }, []);
+
+  if (!sprint) {
+    return <div className="h-40 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-line-2)]" />;
+  }
 
   return (
     <>
@@ -234,7 +238,15 @@ function HomeTeam() {
 }
 
 function HomeEnterprise() {
-  const org = getOrgHealth();
+  const [org, setOrg] = useState<OrgHealthResponse | null>(null);
+
+  useEffect(() => {
+    api.workspace.getOrgHealth().then(setOrg);
+  }, []);
+
+  if (!org) {
+    return <div className="h-40 animate-pulse rounded-[var(--radius-card)] bg-[var(--color-line-2)]" />;
+  }
 
   return (
     <>
@@ -242,7 +254,7 @@ function HomeEnterprise() {
         <h1 className="font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">Organization</h1>
         <div className="mt-3 flex items-baseline gap-3">
           <span className="font-[var(--font-display)] text-[68px] font-semibold leading-none tracking-[-.05em] text-[var(--color-ink)]">
-            {org.executionHealth}%
+            {org.execution_health}%
           </span>
           <span className="text-[13px] font-medium text-[var(--color-blue)]">{org.delta}</span>
         </div>
@@ -269,7 +281,7 @@ function HomeEnterprise() {
       >
         <span className="text-[11px] font-semibold tracking-[.18em] text-[var(--color-blue)]">✦ AI INSIGHT</span>
         <div className="mt-2 flex flex-col gap-1.5">
-          {org.insight.lines.map((l, i) => (
+          {org.insight_lines.map((l, i) => (
             <p
               key={i}
               className="text-[14.5px] leading-relaxed"
