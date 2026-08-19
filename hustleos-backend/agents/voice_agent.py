@@ -14,11 +14,9 @@ class VoiceAgent:
     def speech_to_text(self, audio_bytes: bytes) -> str:
         """Transcribe audio using Whisper API"""
         try:
-            import io
-            audio_file = io.BytesIO(audio_bytes)
             transcript = self.openai_client.audio.transcriptions.create(
                 model="whisper-1",
-                file=audio_file,
+                file=("recording.webm", audio_bytes),
             )
             return transcript.text
         except Exception as e:

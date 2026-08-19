@@ -36,14 +36,14 @@ export function VoiceOrb({
       {[0, 1.13, 2.26].map((d) => (
         <span
           key={d}
-          className="absolute h-[210px] w-[210px] rounded-full border border-[#2563EB] opacity-35"
+          className="absolute h-[210px] w-[210px] rounded-full border border-[var(--color-blue)] opacity-35"
           style={{ animation: `hosRipple 3.4s ease-out ${d}s infinite` }}
         />
       ))}
       <span
         className="absolute h-[250px] w-[250px] rounded-full"
         style={{
-          background: 'radial-gradient(circle,rgba(37,99,235,.12) 0%,transparent 68%)',
+          background: 'radial-gradient(circle,var(--color-blue-soft) 0%,transparent 68%)',
           animation: `hosGlow ${t.glow} ease-in-out infinite`,
         }}
       />
@@ -58,7 +58,7 @@ export function VoiceOrb({
         <div
           className="absolute inset-0 opacity-95"
           style={{
-            background: 'radial-gradient(circle at 34% 30%,#2563EB 0%,transparent 68%)',
+            background: 'radial-gradient(circle at 34% 30%,var(--color-blue) 0%,transparent 68%)',
             filter: 'blur(16px)',
             animation: `hosMorph ${t.a} ease-in-out infinite`,
           }}
@@ -66,7 +66,7 @@ export function VoiceOrb({
         <div
           className="absolute inset-[14px] opacity-60"
           style={{
-            background: 'radial-gradient(circle at 68% 62%,#F5C542 0%,transparent 64%)',
+            background: 'radial-gradient(circle at 68% 62%,var(--color-yellow-ink) 0%,transparent 64%)',
             filter: 'blur(20px)',
             animation: `hosMorphRev ${t.b} ease-in-out infinite`,
           }}
@@ -74,7 +74,7 @@ export function VoiceOrb({
         <div
           className="absolute inset-[26px] transition-opacity duration-500"
           style={{
-            background: 'radial-gradient(circle at 40% 72%,#E53935 0%,transparent 62%)',
+            background: 'radial-gradient(circle at 40% 72%,var(--color-red) 0%,transparent 62%)',
             filter: 'blur(22px)',
             opacity: t.red,
             animation: `hosMorph ${t.c} ease-in-out infinite`,
@@ -91,7 +91,7 @@ export function VoiceOrb({
         />
         <div
           className="absolute inset-0 rounded-full"
-          style={{ boxShadow: 'inset 0 0 40px 6px rgba(37,99,235,.12)' }}
+          style={{ boxShadow: 'inset 0 0 40px 6px var(--color-blue-soft)' }}
         />
       </div>
       <div
@@ -101,9 +101,10 @@ export function VoiceOrb({
         {Array.from({ length: 22 }, (_, i) => (
           <span
             key={i}
-            className="w-[2.5px] rounded-full bg-zinc-800 dark:bg-zinc-200 opacity-70"
+            className="w-[2.5px] rounded-full opacity-70"
             style={{
               height: 26,
+              background: 'var(--color-ink)',
               transformOrigin: 'bottom',
               animation: `hosWave ${700 + ((i * 137) % 520)}ms ease-in-out ${(i * 83) % 700}ms infinite`,
             }}

@@ -14,20 +14,20 @@ export const Badge: React.FC<BadgeProps> = ({
   size = 'md',
   className,
 }) => {
-  const baseStyles = 'inline-flex items-center font-semibold rounded-full';
+  const baseStyles = 'inline-flex items-center font-semibold uppercase tracking-[.13em] rounded-[var(--radius-chip)]';
 
   const variantStyles = {
-    default: 'bg-zinc-800 text-zinc-200',
-    success: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
-    warning: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
-    danger: 'bg-red-500/20 text-red-300 border border-red-500/30',
-    info: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
+    default: 'bg-[var(--color-line-2)] text-[var(--color-ink-2)]',
+    success: 'bg-[var(--color-blue-soft)] text-[var(--color-blue)]',
+    warning: 'bg-[var(--color-yellow-soft)] text-[var(--color-yellow)]',
+    danger: 'bg-[var(--color-red-soft)] text-[var(--color-red)]',
+    info: 'bg-[var(--color-blue-soft)] text-[var(--color-blue)]',
   };
 
   const sizeStyles = {
-    sm: 'px-2 py-0.5 text-xs',
-    md: 'px-3 py-1 text-sm',
-    lg: 'px-4 py-1.5 text-base',
+    sm: 'px-1.5 py-0.5 text-[9.5px]',
+    md: 'px-2 py-1 text-[10px]',
+    lg: 'px-2.5 py-1.5 text-xs',
   };
 
   return (

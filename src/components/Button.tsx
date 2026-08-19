@@ -25,11 +25,11 @@ export const Button: React.FC<ButtonProps> = ({
   const baseStyles = 'font-semibold transition-all duration-200 inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
 
   const variantStyles = {
-    primary: 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-500/30',
-    secondary: 'bg-zinc-800 hover:bg-zinc-700 text-white',
-    success: 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-500/30',
-    danger: 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30',
-    outline: 'border-2 border-blue-500 text-blue-400 hover:bg-blue-500/10',
+    primary: 'text-white bg-[var(--color-blue)] hover:brightness-110',
+    secondary: 'bg-[var(--color-raised)] hover:brightness-95 text-[var(--color-ink)] border border-[var(--color-line)]',
+    success: 'bg-emerald-500 hover:bg-emerald-600 text-white',
+    danger: 'border border-[var(--color-red)] text-[var(--color-red)] hover:bg-[var(--color-red-soft)]',
+    outline: 'border border-[var(--color-blue)] text-[var(--color-blue)] hover:bg-[var(--color-blue-soft)]',
   };
 
   const sizeStyles = {
@@ -38,7 +38,7 @@ export const Button: React.FC<ButtonProps> = ({
     lg: 'px-6 py-3 text-lg',
   };
 
-  const roundedStyles = rounded ? 'rounded-full' : 'rounded-lg';
+  const roundedStyles = rounded ? 'rounded-full' : 'rounded-[var(--radius-control)]';
 
   return (
     <button

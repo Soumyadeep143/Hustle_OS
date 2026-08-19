@@ -16,7 +16,13 @@ export function useVoiceSession() {
   const raf = useRef(0);
   const chunks = useRef<Blob[]>([]);
   const silenceSince = useRef<number | null>(null);
+  const hasSpoken = useRef(false);
   const audioEl = useRef<HTMLAudioElement | null>(null);
+
+  // Bumped on every teardown so any in-flight async work from a previous
+  // session (e.g. a React StrictMode double-invoked mount) can detect it's
+  // stale and bail out instead of racing with the current session's state.
+  const epoch = useRef(0);
 
   const stopMeter = () => {
     cancelAnimationFrame(raf.current);
@@ -25,6 +31,7 @@ export function useVoiceSession() {
   };
 
   const teardown = useCallback(() => {
+    epoch.current += 1;
     stopMeter();
     if (rec.current?.state === 'recording') rec.current.stop();
     media.current?.getTracks().forEach((t) => t.stop());
@@ -37,10 +44,11 @@ export function useVoiceSession() {
   useEffect(() => teardown, [teardown]);
 
   const send = useCallback(
-    async (blob: Blob) => {
+    async (blob: Blob, myEpoch: number) => {
       setState('thinking');
       try {
         const t = await api.voice.transcribe(blob);
+        if (epoch.current !== myEpoch) return;
         setTranscript(t.text);
         if (!t.text) {
           setState('idle');
@@ -48,11 +56,13 @@ export function useVoiceSession() {
         }
 
         const a = await api.voice.command(t.text);
+        if (epoch.current !== myEpoch) return;
         setAnswer(a.response);
 
         let url = a.audio_url;
         if (!url) {
           const ttsResult = await api.voice.tts(a.response);
+          if (epoch.current !== myEpoch) return;
           url = ttsResult.audio_url;
         }
 
@@ -60,13 +70,20 @@ export function useVoiceSession() {
           setState('speaking');
           const el = new Audio(url);
           audioEl.current = el;
-          el.onended = () => setState('idle');
-          await el.play().catch(() => setState('idle'));
+          el.onended = () => {
+            if (epoch.current === myEpoch) setState('idle');
+          };
+          await el.play().catch(() => {
+            if (epoch.current === myEpoch) setState('idle');
+          });
         } else {
           setState('speaking');
-          window.setTimeout(() => setState('idle'), 1800);
+          window.setTimeout(() => {
+            if (epoch.current === myEpoch) setState('idle');
+          }, 1800);
         }
       } catch (e) {
+        if (epoch.current !== myEpoch) return;
         setError((e as Error).message);
         setState('idle');
       }
@@ -75,20 +92,34 @@ export function useVoiceSession() {
   );
 
   const start = useCallback(async () => {
+    const myEpoch = ++epoch.current;
     setError(null);
     setAnswer('');
     setTranscript('');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (epoch.current !== myEpoch) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       media.current = stream;
 
       const ac = new AudioContext();
       ctx.current = ac;
+      // A fresh AudioContext can start 'suspended' depending on the browser's
+      // autoplay/activation policy — while suspended, the analyser reads back
+      // silence even though the mic is live, so the level meter and silence
+      // detection would never see real speech at all.
+      if (ac.state === 'suspended') void ac.resume();
+
       const analyser = ac.createAnalyser();
       analyser.fftSize = 1024;
       ac.createMediaStreamSource(stream).connect(analyser);
       const buf = new Uint8Array(analyser.fftSize);
+      silenceSince.current = null;
+      hasSpoken.current = false;
       const tick = () => {
+        if (epoch.current !== myEpoch) return;
         analyser.getByteTimeDomainData(buf);
         let sum = 0;
         for (let i = 0; i < buf.length; i++) {
@@ -101,9 +132,15 @@ export function useVoiceSession() {
 
         const now = performance.now();
         if (rms < 0.06) {
-          silenceSince.current ??= now;
-          if (now - silenceSince.current > 1200) stop();
+          // Only arm the auto-stop once the user has actually said something —
+          // otherwise the initial quiet moment before they start talking would
+          // trip the same 1.2s timer and cut the recording before it begins.
+          if (hasSpoken.current) {
+            silenceSince.current ??= now;
+            if (now - silenceSince.current > 1200) stop();
+          }
         } else {
+          hasSpoken.current = true;
           silenceSince.current = null;
         }
 
@@ -117,11 +154,13 @@ export function useVoiceSession() {
       mr.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
       mr.onstop = () => {
         stopMeter();
-        void send(new Blob(chunks.current, { type: 'audio/webm' }));
+        if (epoch.current !== myEpoch) return;
+        void send(new Blob(chunks.current, { type: 'audio/webm' }), myEpoch);
       };
       mr.start(250);
       setState('listening');
     } catch {
+      if (epoch.current !== myEpoch) return;
       setError('Microphone access is needed for voice');
       setState('idle');
     }

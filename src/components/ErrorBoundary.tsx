@@ -29,12 +29,12 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   render() {
     if (this.state.error) {
       return (
-        <Card variant="dark" className="border-l-4 border-l-red-500 max-w-xl mx-auto mt-12">
+        <Card className="mx-auto mt-12 max-w-xl border-l-4" style={{ borderLeftColor: 'var(--color-red)' }}>
           <div className="flex items-start gap-3">
-            <AlertTriangle className="text-red-400 mt-1 flex-shrink-0" size={24} />
+            <AlertTriangle className="mt-1 flex-shrink-0 text-[var(--color-red)]" size={24} />
             <div className="space-y-3">
-              <h2 className="text-lg font-semibold text-white">Something went wrong</h2>
-              <p className="text-sm text-zinc-400">{this.state.error.message}</p>
+              <h2 className="text-lg font-semibold text-[var(--color-ink)]">Something went wrong</h2>
+              <p className="text-sm text-[var(--color-ink-2)]">{this.state.error.message}</p>
               <Button variant="secondary" size="sm" onClick={this.handleReset}>
                 Try again
               </Button>
