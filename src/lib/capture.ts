@@ -35,9 +35,10 @@ function saveCapturedItems(items: CapturedItem[]) {
 }
 
 /**
- * No backend link-parser exists yet (POST /api/capture/parse in API_CONTRACT.md is
- * not implemented). This is a client-side heuristic standing in for it — every field
- * it produces is editable before save, per the design spec.
+ * No backend link-parser exists yet (POST /api/capture/parse in
+ * docs/design-handoff/API_CONTRACT.md is not implemented). This is a client-side
+ * heuristic standing in for it — every field it produces is editable before save,
+ * per the design spec.
  */
 export function parseCapture(input: string): ParsedCapture {
   const isUrl = /^https?:\/\//i.test(input.trim());

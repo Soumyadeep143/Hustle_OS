@@ -2,9 +2,9 @@ import type { Tone } from './types';
 
 /**
  * Static seed data shaped exactly like the future backend responses documented in
- * API_CONTRACT.md (`GET /api/team/{id}/sprint`, `GET /api/org/health`). There is no
- * multi-user/team data model in hustleos-backend yet — swap these calls for real
- * fetches once routes/workspaces.py exists.
+ * docs/design-handoff/API_CONTRACT.md (`GET /api/team/{id}/sprint`, `GET /api/org/health`).
+ * There is no multi-user/team data model in hustleos-backend yet — swap these calls for
+ * real fetches once routes/workspaces.py exists.
  */
 
 export interface TeamSprint {
