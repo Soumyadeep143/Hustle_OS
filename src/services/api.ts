@@ -490,6 +490,36 @@ export interface Integration {
   last_sync?: string | null;
 }
 
+// ---- Home: TODAY timeline, SIGNALS, AI Brief — real editable records, not derived views ----
+
+export interface TimelineEntry {
+  id: string;
+  user_id: string;
+  at: string;
+  title: string;
+  subtitle?: string | null;
+  tone: 'blue' | 'red' | 'neutral';
+  flag?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Signal {
+  id: string;
+  user_id: string;
+  text: string;
+  tag: string;
+  tone: 'blue' | 'red' | 'yellow' | 'neutral';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Brief {
+  user_id: string;
+  headline: string;
+  updated_at: string;
+}
+
 export const api = {
   voice: {
     transcribe: async (audio: Blob): Promise<TranscribeResponse> => {
@@ -737,6 +767,63 @@ export const api = {
         `/integrations/${key}/connect`
       );
       return { key: data.key, name: key, connected: data.connected };
+    },
+  },
+
+  home: {
+    getTimeline: async (userId: string = DEFAULT_USER_ID): Promise<TimelineEntry[]> => {
+      const { data } = await apiClient.get<TimelineEntry[]>('/home/timeline', { params: { user_id: userId } });
+      return data;
+    },
+    addTimelineEntry: async (
+      entry: { title: string; at?: string; subtitle?: string; tone?: string; flag?: string },
+      userId: string = DEFAULT_USER_ID
+    ): Promise<TimelineEntry> => {
+      const { data } = await apiClient.post<TimelineEntry>('/home/timeline', { ...entry, user_id: userId });
+      return data;
+    },
+    updateTimelineEntry: async (
+      id: string,
+      updates: Partial<{ title: string; at: string; subtitle: string; tone: string; flag: string | null }>,
+      userId: string = DEFAULT_USER_ID
+    ): Promise<TimelineEntry> => {
+      const { data } = await apiClient.patch<TimelineEntry>(`/home/timeline/${id}`, updates, { params: { user_id: userId } });
+      return data;
+    },
+    deleteTimelineEntry: async (id: string, userId: string = DEFAULT_USER_ID): Promise<void> => {
+      await apiClient.delete(`/home/timeline/${id}`, { params: { user_id: userId } });
+    },
+
+    getSignals: async (userId: string = DEFAULT_USER_ID): Promise<Signal[]> => {
+      const { data } = await apiClient.get<Signal[]>('/home/signals', { params: { user_id: userId } });
+      return data;
+    },
+    addSignal: async (
+      signal: { text: string; tag?: string; tone?: string },
+      userId: string = DEFAULT_USER_ID
+    ): Promise<Signal> => {
+      const { data } = await apiClient.post<Signal>('/home/signals', { ...signal, user_id: userId });
+      return data;
+    },
+    updateSignal: async (
+      id: string,
+      updates: Partial<{ text: string; tag: string; tone: string }>,
+      userId: string = DEFAULT_USER_ID
+    ): Promise<Signal> => {
+      const { data } = await apiClient.patch<Signal>(`/home/signals/${id}`, updates, { params: { user_id: userId } });
+      return data;
+    },
+    deleteSignal: async (id: string, userId: string = DEFAULT_USER_ID): Promise<void> => {
+      await apiClient.delete(`/home/signals/${id}`, { params: { user_id: userId } });
+    },
+
+    getBrief: async (userId: string = DEFAULT_USER_ID): Promise<Brief> => {
+      const { data } = await apiClient.get<Brief>('/home/brief', { params: { user_id: userId } });
+      return data;
+    },
+    updateBrief: async (headline: string, userId: string = DEFAULT_USER_ID): Promise<Brief> => {
+      const { data } = await apiClient.patch<Brief>('/home/brief', { headline }, { params: { user_id: userId } });
+      return data;
     },
   },
 };

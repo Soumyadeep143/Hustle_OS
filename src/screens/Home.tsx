@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { api, type DashboardResponse, type MemoryResponse, type OrgHealthResponse, type TeamStateResponse } from '../services/api';
-import { briefFromDashboard, timelineFromDashboard } from '../lib/adapters';
+import {
+  api,
+  type Brief,
+  type MemoryResponse,
+  type OrgHealthResponse,
+  type Signal,
+  type TeamStateResponse,
+  type TimelineEntry,
+} from '../services/api';
 import { useUi } from '../store/useUi';
 import { SectionLabel, TimelineRow, TaskRow, ProgressBar, Chip, StatCell } from '../components/ui';
+import { Button } from '../components/Button';
+import { EditTimelineEntrySheet } from '../components/sheets/EditTimelineEntrySheet';
+import { EditSignalSheet } from '../components/sheets/EditSignalSheet';
 
 function useClock() {
   const [now, setNow] = useState(new Date());
@@ -49,21 +59,51 @@ export function Home() {
 
 function HomePersonal() {
   const navigate = useNavigate();
-  const [dashboard, setDashboard] = useState<DashboardResponse | null>(null);
+  const showToast = useUi((s) => s.showToast);
   const [memory, setMemory] = useState<MemoryResponse | null>(null);
+  const [brief, setBrief] = useState<Brief | null>(null);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
+  const [signals, setSignals] = useState<Signal[]>([]);
   const tasks = useUi((s) => s.tasks);
   const toggleTask = useUi((s) => s.toggleTask);
 
+  const [editingBrief, setEditingBrief] = useState(false);
+  const [briefDraft, setBriefDraft] = useState('');
+  const [savingBrief, setSavingBrief] = useState(false);
+
+  // undefined = sheet closed, null = create mode, entry = edit mode
+  const [timelineSheetEntry, setTimelineSheetEntry] = useState<TimelineEntry | null | undefined>(undefined);
+  const [signalSheetItem, setSignalSheetItem] = useState<Signal | null | undefined>(undefined);
+
   useEffect(() => {
-    Promise.all([api.dashboard.get(), api.memory.get()]).then(([d, m]) => {
-      setDashboard(d);
-      setMemory(m);
-    });
+    api.memory.get().then(setMemory);
+    api.home.getBrief().then(setBrief);
+    api.home.getTimeline().then(setTimeline);
+    api.home.getSignals().then(setSignals);
   }, []);
 
-  const brief = dashboard ? briefFromDashboard(dashboard) : null;
-  const timeline = dashboard && memory ? timelineFromDashboard(dashboard, memory) : [];
   const doneCount = tasks.filter((t) => t.done).length;
+
+  const startEditBrief = () => {
+    setBriefDraft(brief?.headline ?? '');
+    setEditingBrief(true);
+  };
+
+  const saveBrief = async () => {
+    setSavingBrief(true);
+    try {
+      const updated = await api.home.updateBrief(briefDraft.trim() || 'Nothing urgent right now');
+      setBrief(updated);
+      setEditingBrief(false);
+    } catch {
+      showToast('Could not save — try again');
+    } finally {
+      setSavingBrief(false);
+    }
+  };
+
+  const upsert = <T extends { id: string }>(list: T[], item: T): T[] =>
+    list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
 
   return (
     <>
@@ -74,40 +114,72 @@ function HomePersonal() {
         <p className="mt-1 text-[15px] text-[var(--color-ink-2)]">Here's what matters today.</p>
       </div>
 
-      {brief && (
-        <div
-          className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4"
-          style={{ boxShadow: 'var(--shadow-card)' }}
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold tracking-[.18em] text-[var(--color-blue)]">✦ AI BRIEF</span>
-            <span className="font-[var(--font-mono)] text-[11px] text-[var(--color-ink-3)]">now</span>
-          </div>
-          <p className="mt-3 font-[var(--font-display)] text-[15.5px] leading-[1.5] text-[var(--color-ink)]">
-            You have <span className="font-semibold">{brief.headline}</span> today
-            {brief.followupsDue > 0 ? `, including ${brief.followupsDue} follow-up${brief.followupsDue === 1 ? '' : 's'} due.` : '.'}
-          </p>
-          <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line-2)] pt-3">
-            <button onClick={() => navigate('/ai')} className="text-[13px] font-semibold text-[var(--color-blue)]">
-              View plan →
+      <div
+        className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4"
+        style={{ boxShadow: 'var(--shadow-card)' }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-semibold tracking-[.18em] text-[var(--color-blue)]">✦ AI BRIEF</span>
+          {!editingBrief && (
+            <button onClick={startEditBrief} className="text-[11px] font-medium text-[var(--color-blue)]">
+              Edit
             </button>
-            <button onClick={() => navigate('/ai')} className="text-[13px] text-[var(--color-ink-2)]">
-              Ask
-            </button>
-          </div>
+          )}
         </div>
-      )}
 
-      {timeline.length > 0 && (
-        <div>
-          <SectionLabel>TODAY</SectionLabel>
-          <div className="mt-3 flex flex-col">
-            {timeline.map((item, i) => (
-              <TimelineRow key={i} {...item} />
-            ))}
+        {editingBrief ? (
+          <div className="mt-3 flex flex-col gap-2">
+            <textarea
+              value={briefDraft}
+              onChange={(e) => setBriefDraft(e.target.value)}
+              rows={2}
+              className="resize-none rounded-[var(--radius-control)] border border-[var(--color-line)] bg-[var(--color-raised)] px-3 py-2 text-[14px] text-[var(--color-ink)] outline-none"
+            />
+            <div className="flex gap-2">
+              <Button variant="primary" size="sm" onClick={saveBrief} loading={savingBrief}>
+                Save
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setEditingBrief(false)}>
+                Cancel
+              </Button>
+            </div>
           </div>
+        ) : (
+          <>
+            <p className="mt-3 font-[var(--font-display)] text-[15.5px] leading-[1.5] text-[var(--color-ink)]">
+              {brief?.headline ?? 'Loading…'}
+            </p>
+            <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line-2)] pt-3">
+              <button onClick={() => navigate('/ai')} className="text-[13px] font-semibold text-[var(--color-blue)]">
+                View plan →
+              </button>
+              <button onClick={() => navigate('/ai')} className="text-[13px] text-[var(--color-ink-2)]">
+                Ask
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <SectionLabel>TODAY</SectionLabel>
+          <button
+            onClick={() => setTimelineSheetEntry(null)}
+            className="text-[12.5px] font-medium text-[var(--color-blue)]"
+          >
+            + Add
+          </button>
         </div>
-      )}
+        <div className="mt-3 flex flex-col">
+          {timeline.map((item) => (
+            <button key={item.id} onClick={() => setTimelineSheetEntry(item)} className="text-left">
+              <TimelineRow at={item.at} title={item.title} subtitle={item.subtitle ?? ''} tone={item.tone} flag={item.flag ?? undefined} />
+            </button>
+          ))}
+          {timeline.length === 0 && <p className="py-3 text-[13px] text-[var(--color-ink-2)]">Nothing scheduled today.</p>}
+        </div>
+      </div>
 
       <div>
         <div className="mb-3 flex items-center justify-between">
@@ -123,24 +195,47 @@ function HomePersonal() {
         </div>
       </div>
 
-      {memory && memory.insights.length > 0 && (
-        <div>
+      <div>
+        <div className="mb-3 flex items-center justify-between">
           <SectionLabel>SIGNALS</SectionLabel>
-          <div className="mt-3 flex flex-col gap-2">
-            {memory.insights.slice(0, 2).map((insight, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-2 rounded-[var(--radius-control)] p-3 text-[13.5px] leading-relaxed"
-                style={{ background: 'var(--color-yellow-soft)' }}
-              >
-                <span className="mt-0.5 text-[var(--color-yellow-ink)]">✦</span>
-                <span className="flex-1 text-[var(--color-ink)]">{insight}</span>
-                <Chip tone="yellow">{i === 0 ? 'OPPORTUNITY' : 'RECOMMENDATION'}</Chip>
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={() => setSignalSheetItem(null)}
+            className="text-[12.5px] font-medium text-[var(--color-blue)]"
+          >
+            + Add
+          </button>
         </div>
-      )}
+        <div className="mt-3 flex flex-col gap-2">
+          {signals.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setSignalSheetItem(s)}
+              className="flex items-start gap-2 rounded-[var(--radius-control)] p-3 text-left text-[13.5px] leading-relaxed"
+              style={{ background: 'var(--color-yellow-soft)' }}
+            >
+              <span className="mt-0.5 text-[var(--color-yellow-ink)]">✦</span>
+              <span className="flex-1 text-[var(--color-ink)]">{s.text}</span>
+              <Chip tone="yellow">{s.tag}</Chip>
+            </button>
+          ))}
+          {signals.length === 0 && <p className="py-3 text-[13px] text-[var(--color-ink-2)]">No signals right now.</p>}
+        </div>
+      </div>
+
+      <EditTimelineEntrySheet
+        open={timelineSheetEntry !== undefined}
+        onClose={() => setTimelineSheetEntry(undefined)}
+        entry={timelineSheetEntry ?? null}
+        onSaved={(saved) => setTimeline((prev) => upsert(prev, saved))}
+        onDeleted={(id) => setTimeline((prev) => prev.filter((e) => e.id !== id))}
+      />
+      <EditSignalSheet
+        open={signalSheetItem !== undefined}
+        onClose={() => setSignalSheetItem(undefined)}
+        signal={signalSheetItem ?? null}
+        onSaved={(saved) => setSignals((prev) => upsert(prev, saved))}
+        onDeleted={(id) => setSignals((prev) => prev.filter((s) => s.id !== id))}
+      />
     </>
   );
 }

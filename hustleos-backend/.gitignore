@@ -46,6 +46,7 @@ recall_memory.json
 tasks_state.json
 workspace_state.json
 team_state.json
+home_state.json
 integrations_state.json
 .env.local
 .env.*.local
