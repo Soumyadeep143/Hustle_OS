@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { api, type Integration, type MemoryResponse } from '../services/api';
 import { useUi, type Workspace } from '../store/useUi';
 import { SectionLabel, SegmentedControl } from '../components/ui';
 import { Button } from '../components/Button';
+import { EditProfileSheet } from '../components/sheets/EditProfileSheet';
 
 const WORKSPACES: Workspace[] = ['Personal', 'Team', 'Enterprise'];
 
@@ -18,6 +19,7 @@ export function Profile() {
   const [prospectCount, setProspectCount] = useState(0);
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [connecting, setConnecting] = useState<string | null>(null);
+  const [showEditProfile, setShowEditProfile] = useState(false);
   const showToast = useUi((s) => s.showToast);
 
   useEffect(() => {
@@ -44,17 +46,27 @@ export function Profile() {
     <div className="flex flex-col gap-6 px-5 pt-6 pb-4">
       <div className="flex items-center gap-3">
         <div
-          className="flex h-14 w-14 items-center justify-center rounded-[14px] text-[18px] font-semibold text-white"
+          className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[14px] text-[18px] font-semibold text-white"
           style={{ background: 'var(--color-blue)' }}
         >
           {(memory?.user_profile.name ?? 'U').slice(0, 1).toUpperCase()}
         </div>
-        <div>
-          <div className="font-[var(--font-display)] text-[19px] font-semibold text-[var(--color-ink)]">
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-[var(--font-display)] text-[19px] font-semibold text-[var(--color-ink)]">
             {memory?.user_profile.name ?? 'Loading…'}
           </div>
-          <div className="text-[13px] text-[var(--color-ink-2)]">Founder · HustleOS Pro</div>
+          <div className="truncate text-[13px] text-[var(--color-ink-2)]">
+            {memory?.user_profile.target_role
+              ? `${memory.user_profile.target_role}${memory.user_profile.target_location ? ` · ${memory.user_profile.target_location}` : ''}`
+              : 'Add your target role'}
+          </div>
         </div>
+        <button
+          onClick={() => setShowEditProfile(true)}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] text-[var(--color-ink-2)]"
+        >
+          <Pencil size={15} />
+        </button>
       </div>
 
       <div>
@@ -129,6 +141,13 @@ export function Profile() {
       <Button variant="danger" fullWidth onClick={() => navigate('/')}>
         Sign out
       </Button>
+
+      <EditProfileSheet
+        open={showEditProfile}
+        onClose={() => setShowEditProfile(false)}
+        profile={memory?.user_profile ?? null}
+        onSaved={(updated) => setMemory((prev) => (prev ? { ...prev, user_profile: updated } : prev))}
+      />
     </div>
   );
 }

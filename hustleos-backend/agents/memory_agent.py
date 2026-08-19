@@ -77,21 +77,52 @@ class MemoryAgent:
         match_score: int,
         description: str,
     ) -> Dict:
-        app_id = f"app_{len(self.memory['applications']) + 1}"
+        return self.add_application(company, role, status=status, match_score=match_score, description=description)
+
+    def add_application(
+        self,
+        company: str,
+        role: str,
+        status: str = "applied",
+        match_score: int = 0,
+        description: str = "",
+        applied_at: Optional[str] = None,
+        last_followup: Optional[str] = None,
+        notes: Optional[str] = None,
+    ) -> Dict:
         application = {
-            "id": app_id,
+            "id": f"app_{uuid.uuid4().hex[:8]}",
             "company": company,
             "role": role,
-            "applied_at": datetime.now().isoformat()[:10],
+            "applied_at": applied_at or datetime.now().isoformat()[:10],
             "status": status,
             "match_score": match_score,
             "description": description,
-            "last_followup": None,
-            "notes": "",
+            "last_followup": last_followup,
+            "notes": notes or "",
         }
         self.memory["applications"].append(application)
         self._save_memory()
         return application
+
+    def update_application(self, app_id: str, updates: Dict) -> Optional[Dict]:
+        for app in self.memory["applications"]:
+            if app["id"] == app_id:
+                for k, v in updates.items():
+                    if v is not None:
+                        app[k] = v
+                self._save_memory()
+                return app
+        return None
+
+    def delete_application(self, app_id: str) -> bool:
+        apps = self.memory["applications"]
+        for i, app in enumerate(apps):
+            if app["id"] == app_id:
+                del apps[i]
+                self._save_memory()
+                return True
+        return False
 
     def save_capture(self, kind: str, title: str, org: str, meta: Optional[Dict] = None) -> Dict:
         """Persist a Quick Capture item that isn't an application or a RECALL

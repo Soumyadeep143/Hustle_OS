@@ -582,6 +582,38 @@ export const api = {
       const { data } = await apiClient.post<UserProfile>('/memory/', profile);
       return data;
     },
+    addApplication: async (app: {
+      company: string;
+      role: string;
+      status?: string;
+      match_score?: number;
+      description?: string;
+      applied_at?: string;
+      last_followup?: string;
+      notes?: string;
+    }): Promise<Application> => {
+      const { data } = await apiClient.post<Application>('/memory/applications', app);
+      return data;
+    },
+    updateApplication: async (
+      id: string,
+      updates: Partial<{
+        company: string;
+        role: string;
+        status: string;
+        match_score: number;
+        description: string;
+        applied_at: string;
+        last_followup: string | null;
+        notes: string;
+      }>
+    ): Promise<Application> => {
+      const { data } = await apiClient.patch<Application>(`/memory/applications/${id}`, updates);
+      return data;
+    },
+    deleteApplication: async (id: string): Promise<void> => {
+      await apiClient.delete(`/memory/applications/${id}`);
+    },
   },
 
   recall: {

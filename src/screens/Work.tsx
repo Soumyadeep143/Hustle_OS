@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api, type MemoryResponse, type Application, type TeamProject } from '../services/api';
 import { useUi } from '../store/useUi';
 import { UnderlineTabs, TaskRow, ProgressBar, Chip } from '../components/ui';
+import { EditApplicationSheet } from '../components/sheets/EditApplicationSheet';
 import type { Tone } from '../lib/types';
 
 const RISK_TONE: Record<string, 'red' | 'blue' | 'yellow'> = { high: 'red', medium: 'yellow', low: 'blue', unknown: 'blue' };
@@ -30,6 +31,8 @@ export function Work() {
   const toggleTask = useUi((s) => s.toggleTask);
   const [memory, setMemory] = useState<MemoryResponse | null>(null);
   const [projects, setProjects] = useState<TeamProject[]>([]);
+  // undefined = sheet closed, null = create mode, application = edit mode
+  const [applicationSheet, setApplicationSheet] = useState<Application | null | undefined>(undefined);
 
   useEffect(() => {
     api.memory.get().then(setMemory);
@@ -67,10 +70,19 @@ export function Work() {
 
       {workTab === 'Applications' && (
         <div className="flex flex-col">
+          <div className="flex justify-end pb-1">
+            <button onClick={() => setApplicationSheet(null)} className="text-[12.5px] font-medium text-[var(--color-blue)]">
+              + Add
+            </button>
+          </div>
           {memory?.applications.map((app) => {
             const chip = chipFor(app);
             return (
-              <div key={app.id} className="flex items-center justify-between gap-3 border-b border-[var(--color-line-2)] py-3.5 last:border-b-0">
+              <button
+                key={app.id}
+                onClick={() => setApplicationSheet(app)}
+                className="flex items-center justify-between gap-3 border-b border-[var(--color-line-2)] py-3.5 text-left last:border-b-0"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-[var(--font-display)] text-[17px] font-semibold text-[var(--color-ink)]">
                     {app.company}
@@ -88,7 +100,7 @@ export function Work() {
                 <span className="shrink-0 font-[var(--font-mono)] text-[12px] font-medium text-[var(--color-blue)]">
                   {app.match_score}%
                 </span>
-              </div>
+              </button>
             );
           })}
           {(!memory || memory.applications.length === 0) && (
@@ -116,6 +128,27 @@ export function Work() {
           {projects.length === 0 && <p className="py-4 text-[13px] text-[var(--color-ink-2)]">No projects yet.</p>}
         </div>
       )}
+
+      <EditApplicationSheet
+        open={applicationSheet !== undefined}
+        onClose={() => setApplicationSheet(undefined)}
+        application={applicationSheet ?? null}
+        onSaved={(saved) =>
+          setMemory((prev) => {
+            if (!prev) return prev;
+            const exists = prev.applications.some((a) => a.id === saved.id);
+            return {
+              ...prev,
+              applications: exists
+                ? prev.applications.map((a) => (a.id === saved.id ? saved : a))
+                : [saved, ...prev.applications],
+            };
+          })
+        }
+        onDeleted={(id) =>
+          setMemory((prev) => (prev ? { ...prev, applications: prev.applications.filter((a) => a.id !== id) } : prev))
+        }
+      />
     </div>
   );
 }
