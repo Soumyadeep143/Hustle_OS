@@ -1,16 +1,21 @@
+import os
 from typing import Dict, List, Optional
-from anthropic import Anthropic
+from openai import OpenAI
 
 
 class LinkedInAgent:
     """Handle LinkedIn profile enrichment and recruiter engagement"""
 
     def __init__(self):
-        self.client = Anthropic()
-        self.model = "claude-3-5-sonnet-20241022"
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = "gpt-4o-mini"
 
     def find_recruiters(self, company: str, location: str) -> List[Dict]:
-        """Find recruiters/hiring managers on LinkedIn for a company"""
+        """Find recruiter/hiring-contact types for a company.
+
+        NOTE: this is a small hardcoded seed table for demo purposes, not
+        a live LinkedIn lookup. Every entry is tagged data_source="demo_seed"
+        so callers never present these as verified contacts."""
         recruiters_db = {
             "OpenAI": [
                 {
@@ -45,7 +50,7 @@ class LinkedInAgent:
             ],
         }
 
-        return recruiters_db.get(
+        recruiters = recruiters_db.get(
             company,
             [
                 {
@@ -55,6 +60,9 @@ class LinkedInAgent:
                 }
             ],
         )
+        for r in recruiters:
+            r["data_source"] = "demo_seed"
+        return recruiters
 
     def generate_linkedin_dm(self, recruiter: Dict, user_context: Dict, role: str) -> str:
         """Generate personalized LinkedIn DM to recruiter"""
@@ -78,13 +86,13 @@ The DM should:
 
 Return ONLY the DM text, no metadata."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=200,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            return message.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
             print(f"Error generating LinkedIn DM: {e}")
             return f"Hi {recruiter['name']}, I'm interested in the {role} opportunity at your company. Let's connect!"
@@ -170,13 +178,13 @@ The post should:
 
 Return ONLY the post text."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            return message.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
             print(f"Error generating LinkedIn post: {e}")
             return f"Excited about {topic}! What are your thoughts? #AI #Tech"

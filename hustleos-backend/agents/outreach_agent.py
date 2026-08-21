@@ -1,5 +1,6 @@
 import json
-from anthropic import Anthropic
+import os
+from openai import OpenAI
 from typing import Dict, List, Optional
 
 
@@ -7,12 +8,18 @@ class OutreachAgent:
     """Generate personalized outreach sequences for job applications"""
 
     def __init__(self):
-        self.client = Anthropic()
-        self.model = "claude-3-5-sonnet-20241022"
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = "gpt-4o-mini"
         self.dream_companies_db = self._get_dream_companies_db()
 
     def _get_dream_companies_db(self) -> Dict:
-        """Database of companies organized by role/location"""
+        """Small hardcoded seed table of companies by role/location, used
+        when no live company/salary data source is configured.
+
+        NOTE: this is illustrative demo data, not a real-time company or
+        salary database. find_dream_companies() tags every entry with
+        data_source="demo_seed" so callers never present these numbers
+        as verified facts."""
         return {
             "AI Engineer": {
                 "Bengaluru": [
@@ -68,12 +75,16 @@ class OutreachAgent:
         }
 
     def find_dream_companies(self, role: str, location: str) -> List[Dict]:
-        """Find top companies for the given role and location"""
+        """Find top companies for the given role and location."""
         try:
             companies = self.dream_companies_db.get(role, {}).get(location, [])
             if companies:
-                return sorted(companies, key=lambda x: x.get("salary_range", ""), reverse=True)
-            return self._get_default_companies(role, location)
+                companies = sorted(companies, key=lambda x: x.get("salary_range", ""), reverse=True)
+            else:
+                companies = self._get_default_companies(role, location)
+            for c in companies:
+                c["data_source"] = "demo_seed"
+            return companies
         except Exception as e:
             print(f"Error finding dream companies: {e}")
             return []
@@ -98,32 +109,20 @@ class OutreachAgent:
         ]
 
     def find_hiring_managers(self, company: str, role: str) -> List[Dict]:
-        """Find likely hiring managers for the company/role combo"""
-        hiring_managers = {
-            "OpenAI": [
-                {"name": "John Schulman", "title": "VP Research", "focus": "AI Engineering"},
-                {"name": "Dario Amodei", "title": "CEO", "focus": "AI Safety"},
-                {"name": "Liane Moriarty", "title": "Head of Talent", "focus": "Recruitment"},
-            ],
-            "Anthropic": [
-                {"name": "Dario Amodei", "title": "CEO", "focus": "AI Research"},
-                {"name": "Daniela Amodei", "title": "President", "focus": "Operations"},
-                {"name": "Chris Olah", "title": "Research Scientist", "focus": "Interpretability"},
-            ],
-            "Mem0": [
-                {"name": "Ankush Gola", "title": "Founder", "focus": "Product"},
-                {
-                    "name": "Karan Anand",
-                    "title": "Technical Lead",
-                    "focus": "Engineering",
-                },
-            ],
-        }
+        """Find likely hiring-manager contact types for the company/role combo.
 
-        return hiring_managers.get(company, self._get_default_managers(company))
+        NOTE: this returns generic role placeholders (e.g. "Head of
+        Engineering"), never a real named individual. Guessing or scraping
+        real employees' names/titles for outreach is out of scope for this
+        demo and isn't something we'd want to present as verified contact
+        data. Every entry is tagged data_source="demo_seed"."""
+        managers = self._get_default_managers(company)
+        for m in managers:
+            m["data_source"] = "demo_seed"
+        return managers
 
     def _get_default_managers(self, company: str) -> List[Dict]:
-        """Return default hiring managers"""
+        """Return generic hiring-manager role placeholders."""
         return [
             {
                 "name": "Engineering Lead",
@@ -194,12 +193,12 @@ Email should be:
 Return ONLY the email body, no subject or metadata."""
 
                 try:
-                    message = self.client.messages.create(
+                    response = self.client.chat.completions.create(
                         model=self.model,
                         max_tokens=300,
                         messages=[{"role": "user", "content": prompt}],
                     )
-                    email["body"] = message.content[0].text
+                    email["body"] = response.choices[0].message.content
                 except Exception as e:
                     email["body"] = f"Email body generation failed: {str(e)}"
 

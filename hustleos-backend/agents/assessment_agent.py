@@ -1,13 +1,14 @@
+import os
 from typing import Dict, List, Optional
-from anthropic import Anthropic
+from openai import OpenAI
 
 
 class AssessmentAgent:
     """Generate job search and career readiness assessments"""
 
     def __init__(self):
-        self.client = Anthropic()
-        self.model = "claude-3-5-sonnet-20241022"
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = "gpt-4o-mini"
 
     def calculate_career_readiness_score(self, user_context: Dict) -> Dict:
         """Calculate 0-100 career readiness score"""
@@ -144,13 +145,13 @@ User Profile:
 Consider: skill match, location, role alignment, growth opportunity.
 Return ONLY the number (0-100)."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=10,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            return int(message.content[0].text.strip())
+            return int(response.choices[0].message.content.strip())
         except Exception as e:
             print(f"Error calculating job fit: {e}")
             return 50
@@ -230,13 +231,13 @@ Make it motivational but honest. Include:
 - Areas to improve
 - Next 30-day focus"""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            return message.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
             print(f"Error generating report: {e}")
             return "Unable to generate report at this time."
