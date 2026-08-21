@@ -1,12 +1,423 @@
 * {
-  box-sizing: border-box;
+    box-sizing: border-box;
 }
 
 body {
-  margin: 0;
-  padding: 0;
+    margin: 0;
+    padding: 0;
 }
 
 p {
-  margin: 0;
+    margin: 0;
+}
+
+/* ── Integrations animations ────────────────────────────────────────── */
+
+/* Slide-in on mount */
+@keyframes integration-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(-8px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+.integration-row {
+    animation: integration-slide-in 0.3s ease both;
+}
+
+/* Hover: nudge name slightly right */
+.integration-row:hover .integration-name {
+    transform: translateX(3px);
+    transition: transform 0.2s ease, color 0.2s ease;
+    color: var(--color-blue) !important;
+}
+
+.integration-name {
+    display: inline-block;
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+/* Badge shimmer on hover */
+@keyframes badge-shimmer {
+    0% {
+        background-position: -100% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+.integration-row:hover .integration-badge {
+    position: relative;
+    overflow: hidden;
+}
+
+.integration-row:hover .integration-badge::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg,
+            transparent 0%,
+            rgba(255, 255, 255, 0.55) 50%,
+            transparent 100%);
+    background-size: 200% 100%;
+    animation: badge-shimmer 0.7s ease forwards;
+    border-radius: inherit;
+    pointer-events: none;
+}
+
+/* "Connected" text slide-up on mount */
+@keyframes badge-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.integration-badge {
+    animation: badge-pop 0.25s ease both;
+}
+
+/* Connecting spinner dot */
+@keyframes dot-pulse {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0.6);
+        opacity: 0.4;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.integration-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: dot-pulse 1s infinite ease-in-out;
+}
+
+.integration-connecting {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Connect button glow pulse on hover */
+.integration-connect-btn:not(:disabled):hover {
+    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
+
+/* ── Greeting block animations ──────────────────────────────────────── */
+
+@keyframes greeting-rise {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes word-pop-in {
+    from {
+        opacity: 0;
+        transform: translateY(6px) scale(0.97);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes blink {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0;
+    }
+}
+
+@keyframes name-shimmer {
+    0% {
+        background-position: 200% center;
+    }
+
+    100% {
+        background-position: -200% center;
+    }
+}
+
+@keyframes time-shimmer {
+    0% {
+        background-position: 200% center;
+    }
+
+    100% {
+        background-position: -200% center;
+    }
+}
+
+@keyframes period-pop {
+    from {
+        opacity: 0;
+        transform: scale(0.4) rotate(-10deg);
+    }
+
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0deg);
+    }
+}
+
+@keyframes sub-word-in {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes text-pulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 0.85;
+    }
+}
+
+/* block */
+.greeting-block {
+    animation: greeting-rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* heading shell */
+.greeting-heading {
+    opacity: 0;
+    animation: word-pop-in 0.4s 0.04s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    cursor: default;
+    transition: letter-spacing 0.35s ease;
+}
+
+.greeting-heading:hover {
+    letter-spacing: -0.015em;
+}
+
+/* blinking cursor */
+.typing-cursor {
+    display: inline-block;
+    margin-left: 1px;
+    font-weight: 300;
+    color: var(--color-blue);
+    -webkit-text-fill-color: var(--color-blue);
+    animation: blink 0.7s step-start infinite;
+}
+
+/* "Good" */
+.greeting-good {
+    display: inline;
+    color: var(--color-ink);
+    transition: color 0.25s ease;
+}
+
+.greeting-heading:hover .greeting-good {
+    color: var(--color-ink-2);
+}
+
+/* comma */
+.greeting-comma {
+    display: inline;
+    color: var(--color-ink-2);
+}
+
+/* time word — shared base */
+.greeting-time {
+    display: inline;
+    background-size: 260% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: time-shimmer 4.5s 0.8s linear infinite;
+    transition: filter 0.3s ease, letter-spacing 0.3s ease;
+}
+
+.greeting-heading:hover .greeting-time {
+    letter-spacing: 0.01em;
+}
+
+/* ── midnight  (00–03) — deep navy / slate ── */
+.greeting-time--midnight {
+    background-image: linear-gradient(90deg,
+            #1e3a5f 0%, #334155 30%, #475569 60%, #1e3a5f 100%);
+}
+
+.greeting-heading:hover .greeting-time--midnight {
+    filter: drop-shadow(0 0 10px rgba(51, 65, 85, 0.7));
+    animation-duration: 1.5s;
+}
+
+/* ── dawn  (04–05) — soft rose / peach ── */
+.greeting-time--dawn {
+    background-image: linear-gradient(90deg,
+            #fb7185 0%, #fda4af 30%, #fcd34d 60%, #fb7185 100%);
+}
+
+.greeting-heading:hover .greeting-time--dawn {
+    filter: drop-shadow(0 0 12px rgba(251, 113, 133, 0.55));
+    animation-duration: 1.4s;
+}
+
+/* ── morning  (06–10) — warm amber / gold ── */
+.greeting-time--morning {
+    background-image: linear-gradient(90deg,
+            #f59e0b 0%, #fbbf24 35%, #f97316 65%, #f59e0b 100%);
+}
+
+.greeting-heading:hover .greeting-time--morning {
+    filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.6));
+    animation-duration: 1.3s;
+}
+
+/* ── midday  (11–12) — bright yellow / lime ── */
+.greeting-time--midday {
+    background-image: linear-gradient(90deg,
+            #facc15 0%, #a3e635 35%, #34d399 65%, #facc15 100%);
+}
+
+.greeting-heading:hover .greeting-time--midday {
+    filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.6));
+    animation-duration: 1.2s;
+}
+
+/* ── afternoon  (13–16) — sky blue / cyan ── */
+.greeting-time--afternoon {
+    background-image: linear-gradient(90deg,
+            #0ea5e9 0%, #38bdf8 35%, #06b6d4 65%, #0ea5e9 100%);
+}
+
+.greeting-heading:hover .greeting-time--afternoon {
+    filter: drop-shadow(0 0 12px rgba(14, 165, 233, 0.55));
+    animation-duration: 1.4s;
+}
+
+/* ── dusk  (17–18) — orange / coral ── */
+.greeting-time--dusk {
+    background-image: linear-gradient(90deg,
+            #f97316 0%, #fb923c 30%, #e11d48 65%, #f97316 100%);
+}
+
+.greeting-heading:hover .greeting-time--dusk {
+    filter: drop-shadow(0 0 12px rgba(249, 115, 22, 0.6));
+    animation-duration: 1.3s;
+}
+
+/* ── evening  (19–21) — indigo / violet ── */
+.greeting-time--evening {
+    background-image: linear-gradient(90deg,
+            #6366f1 0%, #8b5cf6 35%, #a78bfa 65%, #6366f1 100%);
+}
+
+.greeting-heading:hover .greeting-time--evening {
+    filter: drop-shadow(0 0 12px rgba(139, 92, 246, 0.6));
+    animation-duration: 1.3s;
+}
+
+/* ── night  (22–23) — deep purple / midnight blue ── */
+.greeting-time--night {
+    background-image: linear-gradient(90deg,
+            #312e81 0%, #4c1d95 35%, #7c3aed 65%, #312e81 100%);
+}
+
+.greeting-heading:hover .greeting-time--night {
+    filter: drop-shadow(0 0 12px rgba(124, 58, 237, 0.6));
+    animation-duration: 1.5s;
+}
+
+/* name */
+.greeting-name {
+    display: inline;
+    background-image: linear-gradient(90deg,
+            var(--color-ink) 0%, var(--color-blue) 45%, var(--color-ink) 100%);
+    background-size: 250% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: name-shimmer 4s 1.8s linear infinite;
+    transition: filter 0.3s ease;
+}
+
+.greeting-heading:hover .greeting-name {
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--color-blue) 40%, transparent));
+    animation-duration: 1.2s;
+}
+
+/* period */
+.greeting-period {
+    display: inline-block;
+    -webkit-text-fill-color: var(--color-ink-2);
+    animation: period-pop 0.35s 0.15s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* loading placeholder */
+.greeting-placeholder {
+    animation: text-pulse 1.4s ease-in-out infinite;
+}
+
+/* subtitle — word by word */
+.greeting-sub {
+    color: var(--color-ink-2);
+    cursor: default;
+}
+
+.greeting-sub-word {
+    display: inline-block;
+    opacity: 0;
+    transform: translateY(5px);
+    transition: none;
+}
+
+.greeting-sub-word.visible {
+    animation: sub-word-in 0.32s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.greeting-sub:hover .greeting-sub-word.visible {
+    transition: transform 0.2s ease, color 0.2s ease;
+}
+
+.greeting-sub-word.visible:hover {
+    transform: translateY(-2px);
+    color: var(--color-ink);
 }

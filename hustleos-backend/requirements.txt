@@ -4,6 +4,23 @@ python-dotenv==1.0.0
 openai==1.3.0
 anthropic==0.7.0
 elevenlabs==0.2.24
-pydantic==2.5.0
+pydantic==1.10.13
 httpx==0.25.0
 aiofiles==23.2.1
+python-multipart==0.0.6
+psycopg2-binary==2.9.9
+pyjwt==2.9.0
+bcrypt==4.2.0
+email-validator==2.2.0
+
+# Provides the IANA timezone database for stdlib zoneinfo (agents/schedule_engine.py's
+# date/time resolution). Required on Windows/some minimal Linux images where zoneinfo
+# has no OS-level tz database to fall back to — without it, ZoneInfo(<any IANA name>)
+# raises ZoneInfoNotFoundError unconditionally.
+tzdata==2026.3
+
+# Mem0 integration for RECALL (memory_providers/mem0_provider.py) talks to
+# the Mem0 REST API directly over httpx (already pinned above) instead of
+# the mem0ai SDK, which requires pydantic>=2 and would conflict with the
+# pydantic==1.10.13 pin needed for elevenlabs==0.2.24. No extra package is
+# required — set MEM0_API_KEY in .env to activate it.

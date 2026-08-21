@@ -1,19 +1,19 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from models import DashboardResponse
 from agents import MemoryAgent, PlannerAgent
+from auth import get_current_user_id
 from typing import Dict
 
 router = APIRouter()
 
-def get_agents() -> Dict:
+def get_agents(user_id: str = Depends(get_current_user_id)) -> Dict:
     return {
-        "memory": MemoryAgent(),
+        "memory": MemoryAgent(user_id=user_id),
         "planner": PlannerAgent(),
     }
 
 @router.get("/", response_model=DashboardResponse)
 async def get_dashboard(
-    user_id: str = Query("user_default"),
     agents: Dict = Depends(get_agents),
 ):
     """Get dashboard data including metrics and priorities"""

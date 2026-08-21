@@ -1,12 +1,32 @@
 import json
-from anthropic import Anthropic
+import os
+from openai import OpenAI
 from typing import Dict, List
 
 
+def _parse_json_array(text: str) -> list:
+    """Groq's gpt-oss models sometimes wrap JSON replies in a ```json ... ```
+    fence even when told not to -- strip it before parsing."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    return json.loads(text)
+
+
 class PlannerAgent:
+    """Uses Groq (openai/gpt-oss-20b) -- fast/cheap, fine for a short
+    structured JSON reply once given enough max_tokens to cover the
+    model's internal reasoning overhead before the visible answer."""
+
     def __init__(self):
-        self.client = Anthropic()
-        self.model = "claude-3-5-sonnet-20241022"
+        self.client = OpenAI(
+            api_key=os.getenv("GROQ_API_KEY"),
+            base_url="https://api.groq.com/openai/v1",
+        )
+        self.model = "openai/gpt-oss-20b"
 
     def generate_daily_plan(self, user_context: Dict) -> List[str]:
         """Generate a motivational 3-item priority list for today"""
@@ -28,20 +48,20 @@ Example: ["🎯 Item 1", "📝 Item 2", "🚀 Item 3"]
 
 Return ONLY the JSON array, no other text."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=200,
+                max_tokens=500,
                 messages=[{"role": "user", "content": prompt}],
             )
 
             try:
-                plans = json.loads(message.content[0].text)
-                return plans if isinstance(plans, list) else ["🎯 Continue job search", "📝 Update portfolio", "🚀 Network with peers"]
+                plans = _parse_json_array(response.choices[0].message.content)
+                return plans if isinstance(plans, list) else []
             except json.JSONDecodeError:
-                return ["🎯 Continue job search", "📝 Update portfolio", "🚀 Network with peers"]
+                return []
         except Exception as e:
             print(f"Error generating daily plan: {e}")
-            return ["🎯 Apply to 3 jobs", "📝 Follow up with recruiter", "🚀 Practice interview"]
+            return []
 
     def calculate_execution_score(self, user_context: Dict) -> int:
         """Calculate execution score (0-100)"""

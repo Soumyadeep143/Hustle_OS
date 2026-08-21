@@ -4,7 +4,7 @@ import clsx from 'clsx';
 interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
   className?: string;
-  variant?: 'default' | 'gradient' | 'dark';
+  variant?: 'default' | 'raised' | 'dark';
   hover?: boolean;
   animated?: boolean;
 }
@@ -17,19 +17,20 @@ export const Card: React.FC<CardProps> = ({
   animated = false,
   ...rest
 }) => {
-  const baseStyles = 'rounded-lg border p-6 transition-all duration-300';
+  const baseStyles = 'rounded-[var(--radius-card)] border p-4 transition-all duration-300';
 
   const variantStyles = {
-    default: 'bg-slate-800 border-slate-700',
-    gradient: 'bg-gradient-to-br from-slate-800 to-slate-900 border-slate-600',
-    dark: 'bg-slate-900 border-slate-800',
+    default: 'bg-[var(--color-surface)] border-[var(--color-line)]',
+    raised: 'bg-[var(--color-raised)] border-[var(--color-line)]',
+    dark: 'bg-[var(--color-ink)] border-[var(--color-line)] text-[var(--color-bg)]',
   };
 
-  const hoverStyles = hover ? 'hover:shadow-xl hover:border-blue-500/50' : '';
+  const hoverStyles = hover ? 'hover:border-[var(--color-blue)]/30' : '';
   const animationStyles = animated ? 'animate-fadeIn' : '';
 
   return (
     <div
+      {...rest}
       className={clsx(
         baseStyles,
         variantStyles[variant],
@@ -37,7 +38,7 @@ export const Card: React.FC<CardProps> = ({
         animationStyles,
         className
       )}
-      {...rest}
+      style={{ boxShadow: 'var(--shadow-card)', ...rest.style }}
     >
       {children}
     </div>

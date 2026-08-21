@@ -1,11 +1,16 @@
-from anthropic import Anthropic
+import os
+from openai import OpenAI
 from typing import Dict
 
 
 class DocumentationAgent:
+    """Uses OpenAI directly (gpt-4o-mini) -- prose quality matters most
+    here (cold emails, cover letters), matching the OpenAI usage already
+    established for prose generation elsewhere in this codebase."""
+
     def __init__(self):
-        self.client = Anthropic()
-        self.model = "claude-3-5-sonnet-20241022"
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.model = "gpt-4o-mini"
 
     def generate_email(self, opportunity: Dict, user_context: Dict) -> str:
         """Generate a personalized cold email"""
@@ -15,13 +20,13 @@ class DocumentationAgent:
 
             prompt = f"""Draft a personalized, punchy cold email (3 sentences max) to the hiring manager at {opportunity['company']} for the {opportunity['role']} position. The candidate is {profile['name']}, a {skills} engineer based in {profile['target_location']} interested in {profile['target_role']}. Make it engaging and to-the-point."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            return message.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
             print(f"Error generating email: {e}")
             return f"Hi {opportunity['company']} team,\n\nI'm interested in the {opportunity['role']} position."
@@ -39,13 +44,13 @@ Role: {opportunity['role']}
 Description: {opportunity['description']}
 Make it 3-4 paragraphs, professional but authentic."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            return message.content[0].text
+            return response.choices[0].message.content
         except Exception as e:
             print(f"Error generating cover letter: {e}")
             return f"Dear {opportunity['company']} Hiring Team,\n\nI am writing to express my strong interest in the {opportunity['role']} position."

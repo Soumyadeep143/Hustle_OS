@@ -1,16 +1,16 @@
-from fastapi import APIRouter, Depends, Query
-from models import MemoryResponse
+from fastapi import APIRouter, Depends, HTTPException
+from models import Application, ApplicationCreateRequest, ApplicationUpdateRequest, MemoryResponse, UserProfile
 from agents import MemoryAgent
+from auth import get_current_user_id
 from typing import Dict
 
 router = APIRouter()
 
-def get_memory_agent() -> MemoryAgent:
-    return MemoryAgent()
+def get_memory_agent(user_id: str = Depends(get_current_user_id)) -> MemoryAgent:
+    return MemoryAgent(user_id=user_id)
 
 @router.get("/", response_model=MemoryResponse)
 async def get_memory(
-    user_id: str = Query("user_default"),
     agent: MemoryAgent = Depends(get_memory_agent),
 ):
     """Get user memory including profile, applications, and insights"""
@@ -36,3 +36,42 @@ async def get_memory(
             applications=[],
             insights=[f"Error loading memory: {str(e)}"],
         )
+
+@router.post("/", response_model=UserProfile)
+async def update_profile(
+    profile: UserProfile,
+    agent: MemoryAgent = Depends(get_memory_agent),
+):
+    """Update user profile"""
+    updated = agent.update_profile(profile.dict())
+    return updated
+
+
+@router.post("/applications", response_model=Application)
+async def create_application(
+    request: ApplicationCreateRequest,
+    agent: MemoryAgent = Depends(get_memory_agent),
+):
+    return agent.add_application(**request.dict())
+
+
+@router.patch("/applications/{app_id}", response_model=Application)
+async def update_application(
+    app_id: str,
+    request: ApplicationUpdateRequest,
+    agent: MemoryAgent = Depends(get_memory_agent),
+):
+    app = agent.update_application(app_id, request.dict(exclude_unset=True))
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found")
+    return app
+
+
+@router.delete("/applications/{app_id}")
+async def delete_application(
+    app_id: str,
+    agent: MemoryAgent = Depends(get_memory_agent),
+):
+    if not agent.delete_application(app_id):
+        raise HTTPException(status_code=404, detail="Application not found")
+    return {"deleted": True}

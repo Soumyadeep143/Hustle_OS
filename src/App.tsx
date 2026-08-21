@@ -1,75 +1,56 @@
-import { useState } from 'react';
-import {
-  Navigation,
-  VoiceCommandCenter,
-  Dashboard,
-  Applications,
-  Settings,
-} from './components';
+import { useEffect } from 'react';
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AppShell } from './app/AppShell';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { Home } from './screens/Home';
+import { AI } from './screens/AI';
+import { Profile } from './screens/Profile';
+import { Login } from './screens/Login';
+import { Signup } from './screens/Signup';
+import { RecallOverview } from './screens/recall/RecallOverview';
+import { RecallDetail } from './screens/recall/RecallDetail';
+import { useAuth } from './store/useAuth';
 import './styles/globals.css';
 
-type Tab = 'voice' | 'dashboard' | 'applications' | 'settings';
-
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('voice');
+  const status = useAuth((s) => s.status);
+  const hydrate = useAuth((s) => s.hydrate);
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'voice':
-        return (
-          <VoiceCommandCenter
-            onCommand={() => {
-              // Handle voice commands
-            }}
-          />
-        );
-      case 'dashboard':
-        return <Dashboard />;
-      case 'applications':
-        return <Applications />;
-      case 'settings':
-        return <Settings />;
-      default:
-        return null;
-    }
-  };
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  if (status === 'checking') {
+    return <div className="min-h-dvh" style={{ background: 'var(--color-bg)' }} />;
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900">
-      <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
-
-      {/* Main Content */}
-      <main className="pt-20 pb-8 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          {/* Page Header */}
-          <div className="mb-8 animate-fadeIn">
-            <h1 className="text-4xl font-bold text-white mb-2 font-geist">
-              {activeTab === 'voice'
-                ? 'Voice Command Center'
-                : activeTab === 'dashboard'
-                ? 'Dashboard'
-                : activeTab === 'applications'
-                ? 'Applications'
-                : 'Settings'}
-            </h1>
-            <p className="text-slate-400">
-              {activeTab === 'voice'
-                ? 'Control HustleOS with your voice'
-                : activeTab === 'dashboard'
-                ? 'Track your job search progress'
-                : activeTab === 'applications'
-                ? 'Manage your applications'
-                : 'Customize your HustleOS experience'}
-            </p>
-          </div>
-
-          {/* Content */}
-          <div className="animate-slideInFromTop">
-            {renderContent()}
-          </div>
-        </div>
-      </main>
-    </div>
+    <HashRouter>
+      <ErrorBoundary>
+        <Routes>
+          {status === 'guest' ? (
+            <>
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              <Route path="/signup" element={<Navigate to="/" replace />} />
+              <Route element={<AppShell />}>
+                <Route path="/" element={<Home />} />
+                <Route path="/recall" element={<RecallOverview />} />
+                <Route path="/recall/:id" element={<RecallDetail />} />
+                <Route path="/ai" element={<AI />} />
+                <Route path="/profile" element={<Profile />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Route>
+            </>
+          )}
+        </Routes>
+      </ErrorBoundary>
+    </HashRouter>
   );
 }
 
