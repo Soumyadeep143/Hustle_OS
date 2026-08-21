@@ -19,6 +19,9 @@ from .home_store import HomeStore
 from .user_store import UserStore
 from .calendar_store import CalendarStore
 from .conversation_store import ConversationStateStore
+from .outreach_agent import OutreachAgent
+from .linkedin_agent import LinkedInAgent
+from .assessment_agent import AssessmentAgent
 
 __all__ = [
     "MemoryAgent",
@@ -43,4 +46,7 @@ __all__ = [
     "UserStore",
     "CalendarStore",
     "ConversationStateStore",
+    "OutreachAgent",
+    "LinkedInAgent",
+    "AssessmentAgent",
 ]
