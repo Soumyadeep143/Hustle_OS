@@ -4,6 +4,19 @@ from typing import Dict, List, Optional
 from openai import OpenAI
 
 
+def _parse_json_array(text: str) -> list:
+    """gpt-4o-mini often wraps JSON replies in a ```json ... ``` fence even
+    when told not to -- strip it before parsing."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    parsed = json.loads(text)
+    return parsed if isinstance(parsed, list) else []
+
+
 class LinkedInAgent:
     """Handle LinkedIn profile enrichment and recruiter engagement"""
 
@@ -34,8 +47,7 @@ Return ONLY the JSON array, no other text."""
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
-            recruiters = json.loads(response.choices[0].message.content)
-            return recruiters if isinstance(recruiters, list) else []
+            return _parse_json_array(response.choices[0].message.content)
         except Exception as e:
             print(f"Error finding recruiters: {e}")
             return []

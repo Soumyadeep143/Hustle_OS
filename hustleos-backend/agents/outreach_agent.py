@@ -4,6 +4,19 @@ from openai import OpenAI
 from typing import Dict, List, Optional
 
 
+def _parse_json_array(text: str) -> list:
+    """gpt-4o-mini often wraps JSON replies in a ```json ... ``` fence even
+    when told not to -- strip it before parsing."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    parsed = json.loads(text)
+    return parsed if isinstance(parsed, list) else []
+
+
 class OutreachAgent:
     """Generate personalized outreach sequences for job applications"""
 
@@ -38,8 +51,7 @@ Base this on real market knowledge, not invented figures. Return ONLY the JSON a
                 max_tokens=800,
                 messages=[{"role": "user", "content": prompt}],
             )
-            companies = json.loads(response.choices[0].message.content)
-            return companies if isinstance(companies, list) else []
+            return _parse_json_array(response.choices[0].message.content)
         except Exception as e:
             print(f"Error finding dream companies: {e}")
             return []
@@ -68,8 +80,7 @@ Return ONLY the JSON array, no other text."""
                 max_tokens=300,
                 messages=[{"role": "user", "content": prompt}],
             )
-            managers = json.loads(response.choices[0].message.content)
-            return managers if isinstance(managers, list) else []
+            return _parse_json_array(response.choices[0].message.content)
         except Exception as e:
             print(f"Error finding hiring managers: {e}")
             return []
