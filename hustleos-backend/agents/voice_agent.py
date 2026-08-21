@@ -248,6 +248,11 @@ class VoiceAgent:
                             "ambiguity_reason":  draft.ambiguity_reason,
                         },
                     )
+            if user_id:
+                try:
+                    self.conversation_store.append_turn(user_id, transcript, response_text)
+                except Exception:
+                    pass  # history is a quality improvement, never a hard dependency
             return {
                 "response":      response_text,
                 "audio_url":     self.text_to_speech(response_text) or None,
@@ -295,8 +300,21 @@ class VoiceAgent:
             except Exception:
                 pass  # provider error → respond without long-term memory
 
+        # Real multi-turn context: the last few (user, assistant) exchanges,
+        # spliced in before the current turn — without this the model saw
+        # every message as an isolated one-shot query with no memory of
+        # anything said earlier in the same conversation.
+        history: List[Dict] = []
+        conv_store = (tool_ctx or {}).get("conv_store")
+        if conv_store and user_id:
+            try:
+                history = conv_store.get_history(user_id)
+            except Exception:
+                pass  # history is a quality improvement, never a hard dependency
+
         messages = [
             {"role": "system", "content": _SYSTEM_PROMPT},
+            *history,
             {
                 "role": "user",
                 "content": (
@@ -306,6 +324,13 @@ class VoiceAgent:
             },
         ]
         tools = TOOL_SPECS if tool_ctx else None
+
+        def _remember(reply: str) -> None:
+            if conv_store and user_id and reply:
+                try:
+                    conv_store.append_turn(user_id, transcript, reply)
+                except Exception:
+                    pass
 
         try:
             for _ in range(4):  # up from 3 — new tools may chain
@@ -318,7 +343,9 @@ class VoiceAgent:
                 message    = response.choices[0].message
                 tool_calls = message.tool_calls or []
                 if not tool_calls:
-                    return (message.content or "").strip()
+                    final_text = (message.content or "").strip()
+                    _remember(final_text)
+                    return final_text
 
                 messages.append(message)
                 for call in tool_calls:
@@ -334,7 +361,9 @@ class VoiceAgent:
                             "content":     json.dumps(result, default=str),
                         }
                     )
-            return _fallback_response(user_name, context)
+            fallback = _fallback_response(user_name, context)
+            _remember(fallback)
+            return fallback
         except Exception as e:
             print(f"Error generating assistant response: {e}")
             return _fallback_response(user_name, context)

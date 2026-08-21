@@ -1,6 +1,6 @@
 """Per-user conversational working memory — Postgres-backed.
 
-Two independent concerns live here, both in the same table row:
+Three independent concerns live here, all in the same table row:
 
 1. PENDING SLOT  (pending_type / pending_payload)
    Used when the assistant asks a follow-up question and the next message
@@ -18,15 +18,24 @@ Two independent concerns live here, both in the same table row:
    before the tool-calling loop.
    No expiry — the last entity stays until a different one is referenced.
 
-Schema: db/migrations/005_conversation_state.sql
+3. HISTORY  (history)
+   The last _MAX_HISTORY_TURNS (user, assistant) exchanges, oldest first.
+   Written by voice_agent.py after every turn (chat and scheduling alike);
+   read back and spliced into the prompt before the current turn so the
+   model actually sees the conversation instead of treating each message
+   as an isolated one-shot query. Trimmed on every write, not just on
+   read, so the stored blob never grows unbounded.
+
+Schema: db/migrations/005_conversation_state.sql, 007_conversation_history.sql
 """
 import json
 from datetime import date, datetime, timezone
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from db.connection import get_cursor
 
 _MAX_PENDING_AGE_SECONDS = 10 * 60
+_MAX_HISTORY_TURNS = 10  # 10 user+assistant pairs = 20 messages of context
 
 # Entity types the system can track.  Kept as a small closed set so the
 # voice_agent can apply type-specific resolution logic without guessing.
@@ -163,4 +172,44 @@ class ConversationStateStore:
                     updated_at        = now()
                 """,
                 (user_id,),
+            )
+
+    # ── conversation history ────────────────────────────────────────────────
+
+    def get_history(self, user_id: str) -> List[Dict]:
+        """Return the last N (role, content) messages for this user, oldest
+        first, or [] if there's no history yet."""
+        with get_cursor() as cur:
+            cur.execute(
+                "select history from conversation_state where user_id = %s",
+                (user_id,),
+            )
+            row = cur.fetchone()
+        if not row or not row.get("history"):
+            return []
+        return row["history"]
+
+    def append_turn(self, user_id: str, user_message: str, assistant_message: str) -> None:
+        """Append one (user, assistant) exchange to this user's stored
+        history, trimming to the last _MAX_HISTORY_TURNS pairs so the
+        stored blob — and therefore every future prompt — never grows
+        unbounded. Best-effort: callers should treat a failure here as
+        non-fatal (history is a quality improvement, never a hard
+        dependency for producing a reply)."""
+        if not user_message or not assistant_message:
+            return
+        history = self.get_history(user_id)
+        history.append({"role": "user", "content": user_message})
+        history.append({"role": "assistant", "content": assistant_message})
+        history = history[-(_MAX_HISTORY_TURNS * 2):]
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                insert into conversation_state (user_id, history, updated_at)
+                values (%s, %s, now())
+                on conflict (user_id) do update set
+                    history    = excluded.history,
+                    updated_at = now()
+                """,
+                (user_id, json.dumps(history)),
             )
