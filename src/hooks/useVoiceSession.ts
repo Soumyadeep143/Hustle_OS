@@ -3,6 +3,28 @@ import { api } from '../services/api';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
+// Safari/iOS's MediaRecorder does not support 'audio/webm' at all -- passing
+// it throws synchronously, which previously crashed start() and surfaced as
+// a misleading "Microphone access is needed" error on any Apple device, even
+// with mic permission granted. Feature-detect a format the current browser
+// actually supports instead of hardcoding one.
+function pickRecorderMime(): { mimeType?: string; ext: string } {
+  const candidates: { mimeType: string; ext: string }[] = [
+    { mimeType: 'audio/webm;codecs=opus', ext: 'webm' },
+    { mimeType: 'audio/webm', ext: 'webm' },
+    { mimeType: 'audio/mp4;codecs=mp4a.40.2', ext: 'm4a' },
+    { mimeType: 'audio/mp4', ext: 'm4a' },
+  ];
+  for (const c of candidates) {
+    if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported?.(c.mimeType)) {
+      return c;
+    }
+  }
+  // Let the browser fall back to its own default encoder (some Safari
+  // versions only work with no explicit mimeType at all).
+  return { mimeType: undefined, ext: 'webm' };
+}
+
 export function useVoiceSession() {
   const [state, setState] = useState<VoiceState>('idle');
   const [level, setLevel] = useState(0);
@@ -43,17 +65,43 @@ export function useVoiceSession() {
 
   useEffect(() => teardown, [teardown]);
 
+  const getAudioEl = () => {
+    // Reuse one <audio> element across the whole session rather than
+    // `new Audio(url)` per turn — mobile browsers (Safari in particular)
+    // are more reliable about honoring a later programmatic .play() when
+    // it's called on an element that has already played once, versus a
+    // freshly constructed one several async hops away from the tap that
+    // opened Voice mode.
+    if (!audioEl.current) {
+      audioEl.current = new Audio();
+    }
+    return audioEl.current;
+  };
+
   const send = useCallback(
-    async (blob: Blob, myEpoch: number) => {
+    async (blob: Blob, myEpoch: number, filename: string) => {
       setState('thinking');
       try {
-        const t = await api.voice.transcribe(blob);
+        const t = await api.voice.transcribe(blob, filename);
         if (epoch.current !== myEpoch) return;
         setTranscript(t.text);
         if (!t.text) {
+          // Surface *why* nothing happened instead of silently going idle —
+          // a real STT failure (e.g. an invalidated API key) previously
+          // looked identical to "the user said nothing", with no way to
+          // tell the two apart from the UI. Still auto-resume listening
+          // after a beat either way: the session should keep going on its
+          // own through a transient hiccup, same as a real answer would —
+          // it only truly ends when the user taps Stop/End (epoch check
+          // below makes this a no-op if that already happened).
+          setError(t.error ? `Voice error: ${t.error}` : null);
           setState('idle');
+          window.setTimeout(() => {
+            if (epoch.current === myEpoch) void start();
+          }, t.error ? 2500 : 300);
           return;
         }
+        setError(null);
 
         const a = await api.voice.command(t.text);
         if (epoch.current !== myEpoch) return;
@@ -72,14 +120,18 @@ export function useVoiceSession() {
         // epoch, so this restart is a no-op if that already happened).
         if (url) {
           setState('speaking');
-          const el = new Audio(url);
-          audioEl.current = el;
+          const el = getAudioEl();
+          el.src = url;
           el.onended = () => {
             if (epoch.current === myEpoch) void start();
           };
-          await el.play().catch(() => {
+          try {
+            await el.play();
+          } catch {
+            // Playback blocked (e.g. a mobile autoplay policy) — don't strand
+            // the session silently, keep the loop going.
             if (epoch.current === myEpoch) void start();
-          });
+          }
         } else {
           setState('speaking');
           window.setTimeout(() => {
@@ -152,20 +204,30 @@ export function useVoiceSession() {
       };
       tick();
 
-      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      const { mimeType, ext } = pickRecorderMime();
+      const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      const usedMime = mr.mimeType || mimeType || 'audio/webm';
       rec.current = mr;
       chunks.current = [];
       mr.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
       mr.onstop = () => {
         stopMeter();
         if (epoch.current !== myEpoch) return;
-        void send(new Blob(chunks.current, { type: 'audio/webm' }), myEpoch);
+        void send(new Blob(chunks.current, { type: usedMime }), myEpoch, `recording.${ext}`);
       };
       mr.start(250);
       setState('listening');
-    } catch {
+    } catch (e) {
       if (epoch.current !== myEpoch) return;
-      setError('Microphone access is needed for voice');
+      // Distinguish "browser/OS denied the mic" from "recording failed to
+      // start for some other reason" (e.g. an unsupported format slipping
+      // through) rather than always blaming permissions.
+      const name = (e as DOMException)?.name;
+      setError(
+        name === 'NotAllowedError' || name === 'SecurityError'
+          ? 'Microphone access is needed for voice'
+          : `Voice error: ${(e as Error)?.message || 'could not start recording'}`
+      );
       setState('idle');
     }
   }, [send]);

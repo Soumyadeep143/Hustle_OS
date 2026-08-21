@@ -152,16 +152,17 @@ class VoiceAgent:
 
     # ── STT / TTS ──────────────────────────────────────────────────────────
 
-    def speech_to_text(self, audio_bytes: bytes) -> str:
-        try:
-            transcript = self.client.audio.transcriptions.create(
-                model="whisper-1",
-                file=("recording.webm", audio_bytes),
-            )
-            return transcript.text
-        except Exception as e:
-            print(f"Error in speech-to-text: {e}")
-            return ""
+    def speech_to_text(self, audio_bytes: bytes, filename: str = "recording.webm") -> str:
+        # Deliberately does NOT catch here -- routes/voice.py's /transcribe
+        # already has a try/except that surfaces str(e) as an "error" field
+        # in the response. Swallowing it here (as before) meant a real API
+        # failure (e.g. an invalidated key) looked identical to "the user
+        # said nothing" on the frontend, with no way to tell them apart.
+        transcript = self.client.audio.transcriptions.create(
+            model="whisper-1",
+            file=(filename, audio_bytes),
+        )
+        return transcript.text
 
     def text_to_speech(self, text: str, voice_id: Optional[str] = None) -> str:
         if not self.voice_provider or not text:

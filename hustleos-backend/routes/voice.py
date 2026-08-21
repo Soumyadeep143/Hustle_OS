@@ -31,7 +31,7 @@ async def transcribe(file: UploadFile = File(...), agents: Dict = Depends(get_ag
     """Transcribe audio using Whisper API."""
     try:
         audio_bytes = await file.read()
-        transcript = agents["voice"].speech_to_text(audio_bytes)
+        transcript = agents["voice"].speech_to_text(audio_bytes, filename=file.filename or "recording.webm")
         return {"text": transcript, "intent": "message"} if transcript else {"text": "", "intent": "unknown"}
     except Exception as e:
         return {"error": str(e), "text": "", "intent": "unknown"}

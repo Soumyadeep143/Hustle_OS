@@ -651,9 +651,9 @@ export const api = {
   },
 
   voice: {
-    transcribe: async (audio: Blob): Promise<TranscribeResponse> => {
+    transcribe: async (audio: Blob, filename: string = 'recording.webm'): Promise<TranscribeResponse> => {
       const formData = new FormData();
-      formData.append('file', audio, 'recording.webm');
+      formData.append('file', audio, filename);
       const { data } = await apiClient.post<TranscribeResponse>('/voice/transcribe', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
