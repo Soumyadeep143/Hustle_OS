@@ -50,15 +50,21 @@ async def sync_calendar(entry_id: str, user_id: str = Depends(get_current_user_i
 
     try:
         import time as _time
-        from datetime import datetime
+        from datetime import datetime, timezone
 
         access_token = connection["access_token"]
-        expires_at = datetime.fromisoformat(connection["token_expires_at"]).timestamp()
+        stored_expiry = datetime.fromisoformat(connection["token_expires_at"])
+        if stored_expiry.tzinfo is None:
+            stored_expiry = stored_expiry.replace(tzinfo=timezone.utc)
+        expires_at = stored_expiry.timestamp()
         if expires_at <= _time.time():
             refreshed = refresh_access_token(connection["refresh_token"])
             access_token = refreshed["access_token"]
+            # See the matching note in routes/integrations.py's OAuth
+            # callback -- fromtimestamp() needs tz=utc or a server running
+            # ahead of UTC stores every refreshed expiry hours too late.
             calendar.update_access_token(
-                user_id, access_token, datetime.fromtimestamp(refreshed["expires_at"]).isoformat()
+                user_id, access_token, datetime.fromtimestamp(refreshed["expires_at"], tz=timezone.utc).isoformat()
             )
 
         event = create_event(

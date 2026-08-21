@@ -421,3 +421,70 @@ p {
     transform: translateY(-2px);
     color: var(--color-ink);
 }
+
+/* ── AI Brief card ─────────────────────────────────────────────────── */
+
+@keyframes brief-card-in {
+    from {
+        opacity: 0;
+        transform: translateY(14px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes brief-headline-in {
+    from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.985);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes brief-lang-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.ai-brief-card {
+    animation: brief-card-in 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: 0.15s;
+}
+
+.ai-brief-eyebrow-lang {
+    display: inline-block;
+    animation: brief-lang-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.ai-brief-headline {
+    font-size: clamp(19px, 3.4vw, 26px);
+    line-height: 1.28;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+    animation: brief-headline-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+    animation-delay: 0.3s;
+}
+
+.ai-brief-headline.is-loading {
+    animation: text-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ai-brief-card, .ai-brief-headline, .ai-brief-eyebrow-lang {
+        animation: none;
+    }
+}

@@ -31,6 +31,9 @@ export function AI() {
     try {
       const res = await api.voice.command(prompt);
       setMessages((m) => [...m, { role: 'ai', text: res.response }]);
+      // May have just created a task via the create_task tool -- refresh so
+      // the FOCUS list on Home reflects it without a full app reload.
+      void useUi.getState().refreshTasks();
     } catch {
       setMessages((m) => [...m, { role: 'ai', text: "I couldn't reach HustleOS — try again in a moment." }]);
     } finally {

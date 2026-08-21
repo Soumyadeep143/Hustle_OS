@@ -27,6 +27,7 @@ interface UiState {
   showToast: (msg: string) => void;
   setVoiceOpen: (v: boolean) => void;
   loadTasks: () => Promise<void>;
+  refreshTasks: () => Promise<void>;
   toggleTask: (id: string) => void;
   addTask: (title: string, dueAt?: string, priority?: Task['priority']) => Promise<Task>;
 }
@@ -67,6 +68,18 @@ export const useUi = create<UiState>((set, get) => ({
       set({ tasks, tasksLoaded: true });
     } catch {
       set({ tasksLoaded: true });
+    }
+  },
+
+  // Unlike loadTasks, always re-fetches -- used after the voice/AI assistant
+  // may have created a task via its create_task tool, since that write
+  // happens straight in Postgres and never otherwise touches this store.
+  refreshTasks: async () => {
+    try {
+      const tasks = await api.tasks.list();
+      set({ tasks, tasksLoaded: true });
+    } catch {
+      // best-effort -- keep whatever tasks were already loaded
     }
   },
 

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../services/api';
+import { useUi } from '../store/useUi';
 
 export type VoiceState = 'idle' | 'listening' | 'thinking' | 'speaking';
 
@@ -106,6 +107,10 @@ export function useVoiceSession() {
         const a = await api.voice.command(t.text);
         if (epoch.current !== myEpoch) return;
         setAnswer(a.response);
+        // The assistant may have just created a task via its create_task
+        // tool -- that write lands straight in Postgres, so the FOCUS list
+        // needs an explicit refresh or it silently never shows up.
+        void useUi.getState().refreshTasks();
 
         let url = a.audio_url;
         if (!url) {

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -151,16 +152,34 @@ async def delete_signal(signal_id: str, user_id: str = Depends(get_current_user_
     return {"deleted": True}
 
 
+def _is_today(timestamp: Optional[str]) -> bool:
+    """Compares in UTC on both sides -- `timestamp with time zone` columns
+    normalize to UTC in Postgres, and the server's local system clock can
+    be a different calendar date than UTC near midnight (bit us during
+    testing: local time had already rolled to the next day while the UTC
+    timestamp hadn't)."""
+    if not timestamp:
+        return False
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).date() == datetime.now(timezone.utc).date()
+    except (ValueError, TypeError):
+        return False
+
+
 @router.get("/brief", response_model=Brief)
 async def get_brief(user_id: str = Depends(get_current_user_id), deps: Dict = Depends(get_deps)):
+    """Regenerates once per day so the brief actually reflects today's
+    state instead of freezing on whatever it said the first time it was
+    ever fetched (or whatever was last typed into the old manual-edit box)."""
     store = deps["store"]
     brief = store.get_brief(user_id)
-    if brief:
+    if brief and _is_today(brief.get("updated_at")):
         return brief
     user_context = deps["memory"].get_user_context()
-    priorities = deps["planner"].generate_daily_plan(user_context)
-    action_count = len(priorities)
-    headline = f"{action_count} important action{'s' if action_count != 1 else ''}" if action_count else "Nothing urgent right now"
+    headline = deps["planner"].generate_brief_headline(user_context)
     return store.set_brief(user_id, headline)
 
 

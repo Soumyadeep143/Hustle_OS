@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 import jwt
@@ -83,7 +83,16 @@ async def calendar_callback(code: str = "", state: str = "", error: str = ""):
             user_id,
             access_token=tokens["access_token"],
             refresh_token=tokens["refresh_token"],
-            token_expires_at=datetime.fromtimestamp(tokens["expires_at"]).isoformat(),
+            # tokens["expires_at"] is a UTC epoch float -- fromtimestamp()
+            # without tz=utc converts it to the SERVER's local wall-clock
+            # time instead, which then gets written into a `timestamp with
+            # time zone` column as if it already were UTC. On a server
+            # running ahead of UTC (e.g. IST, +5:30) that stores every
+            # expiry hours later than Google's real one, so sync_calendar's
+            # "is it expired yet" check stays wrong until long after Google
+            # has actually revoked the token, producing a silent 401 on
+            # every sync attempt with no refresh ever triggered.
+            token_expires_at=datetime.fromtimestamp(tokens["expires_at"], tz=timezone.utc).isoformat(),
             scope=tokens["scope"],
         )
         return RedirectResponse(f"{frontend_url}/#/profile?calendar=connected")

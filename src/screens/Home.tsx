@@ -13,7 +13,6 @@ import {
 import { useUi } from '../store/useUi';
 import { localIsoDate } from '../lib/scheduling';
 import { SectionLabel, TimelineRow, TaskRow, ProgressBar, Chip, StatCell } from '../components/ui';
-import { Button } from '../components/Button';
 import { EditTimelineEntrySheet } from '../components/sheets/EditTimelineEntrySheet';
 import { EditSignalSheet } from '../components/sheets/EditSignalSheet';
 
@@ -157,6 +156,30 @@ function AnimatedSubtitle() {
   );
 }
 
+// Small rotating multilingual flourish for the AI Brief eyebrow — cycles
+// through translations of "Today's brief" so the card reads as genuinely
+// live/dynamic without touching the actual (English) brief sentence, which
+// stays in the user's own language for legibility.
+const BRIEF_LABEL_TRANSLATIONS = [
+  "TODAY'S BRIEF",
+  'आज की जानकारी',
+  'ಇಂದಿನ ಸಂಕ್ಷಿಪ್ತ ಮಾಹಿತಿ',
+  'আজকের সংক্ষিপ্ত বিবরণ',
+];
+
+function RotatingLabel({ words, intervalMs = 2600 }: { words: string[]; intervalMs?: number }) {
+  const [index, setIndex] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setIndex((i) => (i + 1) % words.length), intervalMs);
+    return () => clearInterval(id);
+  }, [words, intervalMs]);
+  return (
+    <span key={index} className="ai-brief-eyebrow-lang">
+      {words[index]}
+    </span>
+  );
+}
+
 export function Home() {
   const workspace = useUi((s) => s.workspace);
   const openSheet = useUi((s) => s.openSheet);
@@ -185,17 +208,12 @@ export function Home() {
 
 function HomePersonal() {
   const navigate = useNavigate();
-  const showToast = useUi((s) => s.showToast);
   const [memory, setMemory] = useState<MemoryResponse | null>(null);
   const [brief, setBrief] = useState<Brief | null>(null);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [signals, setSignals] = useState<Signal[]>([]);
   const tasks = useUi((s) => s.tasks);
   const toggleTask = useUi((s) => s.toggleTask);
-
-  const [editingBrief, setEditingBrief] = useState(false);
-  const [briefDraft, setBriefDraft] = useState('');
-  const [savingBrief, setSavingBrief] = useState(false);
 
   // undefined = sheet closed, null = create mode, entry = edit mode
   const [timelineSheetEntry, setTimelineSheetEntry] = useState<TimelineEntry | null | undefined>(undefined);
@@ -209,24 +227,6 @@ function HomePersonal() {
   }, []);
 
   const doneCount = tasks.filter((t) => t.done).length;
-
-  const startEditBrief = () => {
-    setBriefDraft(brief?.headline ?? '');
-    setEditingBrief(true);
-  };
-
-  const saveBrief = async () => {
-    setSavingBrief(true);
-    try {
-      const updated = await api.home.updateBrief(briefDraft.trim() || 'Nothing urgent right now');
-      setBrief(updated);
-      setEditingBrief(false);
-    } catch {
-      showToast('Could not save — try again');
-    } finally {
-      setSavingBrief(false);
-    }
-  };
 
   const upsert = <T extends { id: string }>(list: T[], item: T): T[] =>
     list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
@@ -278,50 +278,30 @@ function HomePersonal() {
       </div>
 
       <div
-        className="rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4"
+        className="ai-brief-card rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-surface)] p-4"
         style={{ boxShadow: 'var(--shadow-card)' }}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <span className="text-[11px] font-semibold tracking-[.18em] text-[var(--color-blue)]">✦ AI BRIEF</span>
-          {!editingBrief && (
-            <button onClick={startEditBrief} className="text-[11px] font-medium text-[var(--color-blue)]">
-              Edit
-            </button>
-          )}
+          <span className="font-[var(--font-mono)] text-[10.5px] text-[var(--color-ink-3)]">
+            <RotatingLabel words={BRIEF_LABEL_TRANSLATIONS} />
+          </span>
         </div>
 
-        {editingBrief ? (
-          <div className="mt-3 flex flex-col gap-2">
-            <textarea
-              value={briefDraft}
-              onChange={(e) => setBriefDraft(e.target.value)}
-              rows={2}
-              className="resize-none rounded-[var(--radius-control)] border border-[var(--color-line)] bg-[var(--color-raised)] px-3 py-2 text-[14px] text-[var(--color-ink)] outline-none"
-            />
-            <div className="flex gap-2">
-              <Button variant="primary" size="sm" onClick={saveBrief} loading={savingBrief}>
-                Save
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setEditingBrief(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <p className="mt-3 font-[var(--font-display)] text-[15.5px] leading-[1.5] text-[var(--color-ink)]">
-              {brief?.headline ?? 'Loading…'}
-            </p>
-            <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line-2)] pt-3">
-              <button onClick={() => navigate('/ai')} className="text-[13px] font-semibold text-[var(--color-blue)]">
-                View plan →
-              </button>
-              <button onClick={() => navigate('/ai')} className="text-[13px] text-[var(--color-ink-2)]">
-                Ask
-              </button>
-            </div>
-          </>
-        )}
+        <p
+          key={brief?.headline ?? 'loading'}
+          className={`ai-brief-headline mt-3 font-[var(--font-display)] font-semibold text-[var(--color-ink)]${brief ? '' : ' is-loading'}`}
+        >
+          {brief?.headline ?? 'Loading…'}
+        </p>
+        <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line-2)] pt-3">
+          <button onClick={() => navigate('/ai')} className="text-[13px] font-semibold text-[var(--color-blue)]">
+            View plan →
+          </button>
+          <button onClick={() => navigate('/ai')} className="text-[13px] text-[var(--color-ink-2)]">
+            Ask
+          </button>
+        </div>
       </div>
 
       <div>
