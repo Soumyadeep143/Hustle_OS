@@ -1,16 +1,38 @@
 import json
 import os
+import re
 from typing import Dict, List, Optional
-from anthropic import Anthropic
+from openai import OpenAI
+
+
+def _parse_json_array(text: str) -> list:
+    """Groq's gpt-oss models sometimes wrap JSON replies in a ```json ... ```
+    fence even when told not to -- strip it before parsing."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.lower().startswith("json"):
+            text = text[4:]
+        text = text.strip()
+    parsed = json.loads(text)
+    return parsed if isinstance(parsed, list) else []
 
 
 class OpportunityAgent:
+    """Uses Groq (openai/gpt-oss-20b) -- fast/cheap, fine for structured
+    JSON output once given enough max_tokens to cover the model's internal
+    reasoning overhead before the visible answer. DocumentationAgent uses
+    OpenAI directly instead, since prose quality matters more there."""
+
     def __init__(self):
-        self.client = Anthropic()
-        self.model = "claude-3-5-sonnet-20241022"
+        self.client = OpenAI(
+            api_key=os.getenv("GROQ_API_KEY"),
+            base_url="https://api.groq.com/openai/v1",
+        )
+        self.model = "openai/gpt-oss-20b"
 
     def discover_jobs(self, role: str, location: str) -> List[Dict]:
-        """Discover job opportunities via Claude based on role and location."""
+        """Discover job opportunities via Groq based on role and location."""
         try:
             prompt = f"""Generate a list of 5 realistic job opportunities for someone looking for a "{role}" role in "{location}".
 
@@ -22,19 +44,18 @@ Example format:
 
 Base the companies and salaries on real market data for the role and location. Return ONLY the JSON array, no other text."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=800,
+                max_tokens=1500,
                 messages=[{"role": "user", "content": prompt}],
             )
-            jobs = json.loads(message.content[0].text)
-            return jobs if isinstance(jobs, list) else []
+            return _parse_json_array(response.choices[0].message.content)
         except Exception as e:
             print(f"Error discovering jobs: {e}")
             return []
 
     def score_opportunity(self, job: Dict, user_context: Dict) -> int:
-        """Score a job opportunity using Claude API"""
+        """Score a job opportunity using Groq"""
         try:
             profile = user_context.get("profile", {})
             skills = ", ".join(profile.get("skills", []))
@@ -53,14 +74,17 @@ User Profile:
 
 Return ONLY the number (0-100). No explanation."""
 
-            message = self.client.messages.create(
+            response = self.client.chat.completions.create(
                 model=self.model,
-                max_tokens=10,
+                max_tokens=400,
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            score_text = message.content[0].text.strip()
-            return int(score_text)
+            score_text = response.choices[0].message.content.strip()
+            match = re.search(r"\d+", score_text)
+            if not match:
+                raise ValueError(f"No number in response: {score_text!r}")
+            return max(0, min(100, int(match.group())))
         except Exception as e:
             print(f"Error scoring opportunity: {e}")
             return 50

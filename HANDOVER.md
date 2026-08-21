@@ -118,9 +118,15 @@ Read this before touching anything inside `agents/` or `routes/`. The system was
 
 ## Known SDK gotcha — do not reintroduce
 
-`anthropic==0.7.0` (pinned in `requirements.txt`) **predates the Messages API.** `client.messages.create` **does not exist** on this version. Calls silently fail/raise `AttributeError` and fall through to exception handlers. This was already bitten in `VoiceAgent` and `schedule_engine`'s LLM polish path — both now use `openai` instead.
+`anthropic==0.7.0` (pinned in `requirements.txt`) **predates the Messages API.** `client.messages.create` **does not exist** on this version. Calls silently fail/raise `AttributeError` and fall through to exception handlers. This bit `VoiceAgent`, `schedule_engine`'s LLM polish path, `OpportunityAgent`, `PlannerAgent`, and `DocumentationAgent` — **all now use `openai` or `groq` instead, and nothing in this codebase calls the Anthropic SDK anymore** (`ANTHROPIC_API_KEY` in `.env` is a placeholder, not a real key).
 
-**If you want to use Claude:** either bump `anthropic` deliberately (verify it doesn't conflict with `pydantic==1.10.13`, which `elevenlabs==0.2.24` requires) or keep using `openai`. Don't add any new call to `self.client.messages` on the current `anthropic==0.7.0` install — it will fail silently.
+Current split, by call volume/cost vs. prose quality:
+- `VoiceAgent`, `schedule_engine`, `OutreachAgent`, `LinkedInAgent`, `AssessmentAgent`, `DocumentationAgent` → OpenAI (`gpt-4o-mini`)
+- `OpportunityAgent`, `PlannerAgent` → Groq (`openai/gpt-oss-20b`), via the OpenAI SDK pointed at `base_url="https://api.groq.com/openai/v1"` — no new dependency needed since Groq's API is OpenAI-compatible
+
+**Groq gotcha:** `openai/gpt-oss-*` models spend part of the token budget on internal "reasoning" before emitting the visible answer — a tight `max_tokens` (e.g. the original `10` for a bare 0–100 score) silently returns an **empty string**, not an error. Budget generously (`opportunity_agent.py`/`planner_agent.py` use 400–1500) and parse defensively (e.g. `score_opportunity` regex-extracts the number rather than trusting the string is bare). Groq's JSON replies also get wrapped in a ` ```json ` fence even when told not to — see `_parse_json_array()` in `opportunity_agent.py`/`planner_agent.py`/`outreach_agent.py`/`linkedin_agent.py` (duplicated per-file, matching this codebase's convention of no shared cross-agent utils).
+
+**If you want to use Claude instead:** either bump `anthropic` deliberately (verify it doesn't conflict with `pydantic==1.10.13`, which `elevenlabs==0.2.24` requires) or keep using `openai`/`groq`. Don't add any new call to `self.client.messages` on the current `anthropic==0.7.0` install — it will fail silently.
 
 The pydantic constraint exists because:
 ```
@@ -195,8 +201,9 @@ All in `hustleos-backend/.env` (gitignored — already populated locally, ask th
 
 | Variable | Used by |
 |---|---|
-| `OPENAI_API_KEY` | `VoiceAgent` (GPT-4o-mini), `schedule_engine` (title polish), `VoiceAgent.speech_to_text` (Whisper) |
-| `ANTHROPIC_API_KEY` | `PlannerAgent`, `OpportunityAgent` (but see SDK gotcha — effectively unused until `anthropic` is bumped) |
+| `OPENAI_API_KEY` | `VoiceAgent` (GPT-4o-mini), `schedule_engine` (title polish), `VoiceAgent.speech_to_text` (Whisper), `OutreachAgent`, `LinkedInAgent`, `AssessmentAgent`, `DocumentationAgent` |
+| `GROQ_API_KEY` | `OpportunityAgent`, `PlannerAgent` — via the OpenAI SDK pointed at Groq's OpenAI-compatible endpoint (`openai/gpt-oss-20b`); see SDK gotcha section for the reasoning-token/max_tokens quirk |
+| `ANTHROPIC_API_KEY` | Unused — placeholder value only. Nothing in this codebase calls the Anthropic SDK; see SDK gotcha section |
 | `ELEVENLABS_API_KEY` | `voice_providers/elevenlabs_provider.py` |
 | `SARVAM_API_KEY` | `voice_providers/` Sarvam provider (primary voice; ElevenLabs is fallback) |
 | `DATABASE_URL` | `db/connection.py` — Supabase pooler connection string |
