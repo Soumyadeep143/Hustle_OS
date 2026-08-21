@@ -10,131 +10,69 @@ class OutreachAgent:
     def __init__(self):
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.model = "gpt-4o-mini"
-        self.dream_companies_db = self._get_dream_companies_db()
-
-    def _get_dream_companies_db(self) -> Dict:
-        """Small hardcoded seed table of companies by role/location, used
-        when no live company/salary data source is configured.
-
-        NOTE: this is illustrative demo data, not a real-time company or
-        salary database. find_dream_companies() tags every entry with
-        data_source="demo_seed" so callers never present these numbers
-        as verified facts."""
-        return {
-            "AI Engineer": {
-                "Bengaluru": [
-                    {
-                        "name": "OpenAI",
-                        "size": "1000-5000",
-                        "stage": "Growth",
-                        "hiring": True,
-                        "salary_range": "50-70L",
-                    },
-                    {
-                        "name": "Anthropic",
-                        "size": "500-1000",
-                        "stage": "Growth",
-                        "hiring": True,
-                        "salary_range": "55-75L",
-                    },
-                    {
-                        "name": "Mem0",
-                        "size": "50-100",
-                        "stage": "Early Growth",
-                        "hiring": True,
-                        "salary_range": "40-60L",
-                    },
-                    {
-                        "name": "Google DeepMind",
-                        "size": "500+",
-                        "stage": "Mature",
-                        "hiring": True,
-                        "salary_range": "60-80L",
-                    },
-                    {
-                        "name": "Meta AI",
-                        "size": "5000+",
-                        "stage": "Mature",
-                        "hiring": True,
-                        "salary_range": "52-72L",
-                    },
-                ],
-                "San Francisco": [
-                    {"name": "OpenAI", "hiring": True, "salary_range": "$150-200k"},
-                    {"name": "Anthropic", "hiring": True, "salary_range": "$160-220k"},
-                    {"name": "xAI", "hiring": True, "salary_range": "$140-180k"},
-                ],
-            },
-            "ML Engineer": {
-                "Bengaluru": [
-                    {"name": "Google India", "hiring": True, "salary_range": "45-65L"},
-                    {"name": "Amazon ML", "hiring": True, "salary_range": "48-68L"},
-                    {"name": "Microsoft Research", "hiring": True, "salary_range": "50-70L"},
-                ],
-            },
-        }
 
     def find_dream_companies(self, role: str, location: str) -> List[Dict]:
-        """Find top companies for the given role and location."""
+        """Find real companies likely to be hiring for a role/location,
+        generated live from the model's real-world knowledge — no
+        hardcoded company list. Returns [] if generation fails; there is
+        no static fallback, so a failure surfaces as "no results" rather
+        than presenting stale or invented data as current."""
         try:
-            companies = self.dream_companies_db.get(role, {}).get(location, [])
-            if companies:
-                companies = sorted(companies, key=lambda x: x.get("salary_range", ""), reverse=True)
-            else:
-                companies = self._get_default_companies(role, location)
-            for c in companies:
-                c["data_source"] = "demo_seed"
-            return companies
+            prompt = f"""List 5 real, currently-operating companies that would realistically be hiring for a "{role}" role in "{location}" right now.
+
+Return ONLY a JSON array of objects with these exact keys:
+  name, size, stage, hiring, salary_range
+
+- name: the real company's actual name
+- size: approximate employee headcount range, e.g. "500-1000"
+- stage: one of "Early Growth", "Growth", "Mature"
+- hiring: true/false — your best real-world estimate of whether they're
+  actively hiring for this kind of role right now
+- salary_range: a realistic market salary range for this role/location,
+  in local currency notation
+
+Base this on real market knowledge, not invented figures. Return ONLY the JSON array, no other text."""
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            companies = json.loads(response.choices[0].message.content)
+            return companies if isinstance(companies, list) else []
         except Exception as e:
             print(f"Error finding dream companies: {e}")
             return []
 
-    def _get_default_companies(self, role: str, location: str) -> List[Dict]:
-        """Return default companies when not in database"""
-        return [
-            {
-                "name": "Startup AI",
-                "size": "100-500",
-                "stage": "Growth",
-                "hiring": True,
-                "location": location,
-            },
-            {
-                "name": "Tech Corp",
-                "size": "1000+",
-                "stage": "Mature",
-                "hiring": True,
-                "location": location,
-            },
-        ]
-
     def find_hiring_managers(self, company: str, role: str) -> List[Dict]:
-        """Find likely hiring-manager contact types for the company/role combo.
+        """Identify realistic hiring-contact roles at a real company for a
+        given role, generated live from the model's real-world knowledge
+        of how hiring is typically structured there. Deliberately never
+        returns a real named individual — we don't scrape or guess actual
+        employees' identities for outreach; only role/title descriptors.
+        Returns [] if generation fails, with no static fallback list."""
+        try:
+            prompt = f"""For the real company "{company}", suggest 2-3 hiring-contact roles relevant to a "{role}" position there.
 
-        NOTE: this returns generic role placeholders (e.g. "Head of
-        Engineering"), never a real named individual. Guessing or scraping
-        real employees' names/titles for outreach is out of scope for this
-        demo and isn't something we'd want to present as verified contact
-        data. Every entry is tagged data_source="demo_seed"."""
-        managers = self._get_default_managers(company)
-        for m in managers:
-            m["data_source"] = "demo_seed"
-        return managers
+Return ONLY a JSON array of objects with these exact keys:
+  name, title, focus
 
-    def _get_default_managers(self, company: str) -> List[Dict]:
-        """Return generic hiring-manager role placeholders."""
-        return [
-            {
-                "name": "Engineering Lead",
-                "title": "Head of Engineering",
-                "focus": "Hiring",
-            },
-            {
-                "name": "Talent Manager",
-                "title": "Head of Talent",
-                "focus": "Recruitment",
-            },
-        ]
+- name: a ROLE DESCRIPTOR, never a real person's name — e.g. "Engineering Hiring Manager"
+- title: their likely job title, e.g. "Head of Engineering"
+- focus: what they'd care about when evaluating a candidate
+
+Return ONLY the JSON array, no other text."""
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            managers = json.loads(response.choices[0].message.content)
+            return managers if isinstance(managers, list) else []
+        except Exception as e:
+            print(f"Error finding hiring managers: {e}")
+            return []
 
     def generate_outreach_sequence(
         self, company: str, role: str, user_context: Dict

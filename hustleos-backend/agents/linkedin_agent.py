@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Dict, List, Optional
 from openai import OpenAI
@@ -11,58 +12,33 @@ class LinkedInAgent:
         self.model = "gpt-4o-mini"
 
     def find_recruiters(self, company: str, location: str) -> List[Dict]:
-        """Find recruiter/hiring-contact types for a company.
+        """Identify realistic recruiting/hiring-contact roles at a real
+        company, generated live from the model's real-world knowledge —
+        no hardcoded company table. Deliberately never returns a real
+        named individual, only role/title descriptors. Returns [] if
+        generation fails, with no static fallback list."""
+        try:
+            prompt = f"""For the real company "{company}" (hiring in/near "{location}"), suggest 2-3 recruiting/hiring-contact roles relevant to engineering positions there.
 
-        NOTE: this is a small hardcoded seed table for demo purposes, not
-        a live LinkedIn lookup. Every entry is tagged data_source="demo_seed"
-        so callers never present these as verified contacts."""
-        recruiters_db = {
-            "OpenAI": [
-                {
-                    "name": "OpenAI Recruiting",
-                    "title": "Talent Acquisition",
-                    "focus": "AI/ML Engineers",
-                },
-                {
-                    "name": "Engineering Team",
-                    "title": "Hiring Manager",
-                    "focus": "Full Stack",
-                },
-            ],
-            "Anthropic": [
-                {
-                    "name": "Anthropic Talent",
-                    "title": "Talent Acquisition Manager",
-                    "focus": "Research & Engineering",
-                },
-                {
-                    "name": "Research Hiring",
-                    "title": "Research Lead",
-                    "focus": "AI Safety Research",
-                },
-            ],
-            "Mem0": [
-                {
-                    "name": "Mem0 Recruiting",
-                    "title": "Hiring Manager",
-                    "focus": "Full Stack Engineers",
-                },
-            ],
-        }
+Return ONLY a JSON array of objects with these exact keys:
+  name, title, focus
 
-        recruiters = recruiters_db.get(
-            company,
-            [
-                {
-                    "name": f"{company} Recruiting",
-                    "title": "Talent Acquisition",
-                    "focus": "All Roles",
-                }
-            ],
-        )
-        for r in recruiters:
-            r["data_source"] = "demo_seed"
-        return recruiters
+- name: a ROLE DESCRIPTOR, never a real person's name — e.g. "Technical Recruiter"
+- title: their likely job title
+- focus: what roles/areas they typically focus on
+
+Return ONLY the JSON array, no other text."""
+
+            response = self.client.chat.completions.create(
+                model=self.model,
+                max_tokens=300,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            recruiters = json.loads(response.choices[0].message.content)
+            return recruiters if isinstance(recruiters, list) else []
+        except Exception as e:
+            print(f"Error finding recruiters: {e}")
+            return []
 
     def generate_linkedin_dm(self, recruiter: Dict, user_context: Dict, role: str) -> str:
         """Generate personalized LinkedIn DM to recruiter"""

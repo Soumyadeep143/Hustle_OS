@@ -30,7 +30,6 @@ class DreamCompanyResponse(BaseModel):
     salary_range: Optional[str] = None
     fit_signals: List[str] = []
     reach_score: int = 0
-    data_source: Optional[str] = None
 
 
 class HiringManager(BaseModel):
@@ -80,7 +79,6 @@ async def find_dream_companies(
                     salary_range=company.get("salary_range"),
                     fit_signals=signals,
                     reach_score=reach_score,
-                    data_source=company.get("data_source"),
                 )
             )
 
