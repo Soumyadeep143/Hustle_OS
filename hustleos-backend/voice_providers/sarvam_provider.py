@@ -39,6 +39,14 @@ class SarvamProvider(VoiceProvider):
             },
             timeout=30.0,
         )
+        # Fail fast here (at provider construction) rather than on the first
+        # real synthesize() call, so get_voice_provider()'s try/except can
+        # fall back to ElevenLabs immediately on a bad/revoked key. Uses
+        # /text-lid (language identification) rather than /text-to-speech
+        # for the healthcheck -- same auth path, but a plain-text call
+        # instead of burning TTS quota on every process start.
+        resp = self._client.post("/text-lid", json={"input": "healthcheck"})
+        resp.raise_for_status()
 
     def synthesize(self, text: str, voice: Optional[str] = None) -> str:
         resp = self._client.post(
