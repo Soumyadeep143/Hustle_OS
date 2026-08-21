@@ -28,6 +28,9 @@
   --color-yellow: #9A7000;
   --color-yellow-ink: #F5C542;
   --color-yellow-soft: rgba(245,197,66,.18);
+  --color-green: #15803D;
+  --color-green-ink: #22C55E;
+  --color-green-soft: rgba(34,197,94,.14);
   --color-scrim: rgba(18,18,17,.44);
   --color-nav-bg: rgba(246,245,241,.86);
   --shadow-card: 0 1px 2px rgba(18,18,17,.05), 0 10px 28px -14px rgba(18,18,17,.16);
@@ -50,6 +53,9 @@
   --color-yellow: #F5C542;
   --color-yellow-ink: #F5C542;
   --color-yellow-soft: rgba(245,197,66,.12);
+  --color-green: #4ADE80;
+  --color-green-ink: #4ADE80;
+  --color-green-soft: rgba(74,222,128,.14);
   --color-scrim: rgba(0,0,0,.62);
   --color-nav-bg: rgba(11,11,12,.86);
   --shadow-card: 0 1px 2px rgba(0,0,0,.6), 0 14px 34px -16px rgba(0,0,0,.8);

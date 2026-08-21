@@ -70,14 +70,14 @@ class TaskStore:
             )
         return created
 
-    def get_task(self, task_id: str) -> Optional[Dict]:
+    def get_task(self, task_id: str, user_id: str) -> Optional[Dict]:
         with get_cursor() as cur:
-            cur.execute("select * from tasks where id = %s", (task_id,))
+            cur.execute("select * from tasks where id = %s and user_id = %s", (task_id, user_id))
             row = cur.fetchone()
         return _stringify(row) if row else None
 
-    def set_done(self, task_id: str, done: bool) -> Optional[Dict]:
-        task = self.get_task(task_id)
+    def set_done(self, task_id: str, user_id: str, done: bool) -> Optional[Dict]:
+        task = self.get_task(task_id, user_id)
         if not task:
             return None
         meta = "Completed" if done else (task["due_at"] or "Today")
@@ -85,10 +85,10 @@ class TaskStore:
             cur.execute(
                 """
                 update tasks set done = %s, meta = %s, updated_at = now()
-                where id = %s
+                where id = %s and user_id = %s
                 returning *
                 """,
-                (done, meta, task_id),
+                (done, meta, task_id, user_id),
             )
             row = cur.fetchone()
         return _stringify(row) if row else None

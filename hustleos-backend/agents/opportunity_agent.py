@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Dict, List, Optional
 from anthropic import Anthropic
@@ -9,50 +10,28 @@ class OpportunityAgent:
         self.model = "claude-3-5-sonnet-20241022"
 
     def discover_jobs(self, role: str, location: str) -> List[Dict]:
-        """Return mock job list matching criteria"""
-        jobs = [
-            {
-                "id": "job_1",
-                "company": "OpenAI",
-                "role": "ML Engineer",
-                "description": "Build cutting-edge AI systems at scale. Work on core models and products.",
-                "salary": "50-70L",
-                "location": location,
-            },
-            {
-                "id": "job_2",
-                "company": "Anthropic",
-                "role": "AI Research Engineer",
-                "description": "Research and develop safe, interpretable AI systems.",
-                "salary": "55-75L",
-                "location": location,
-            },
-            {
-                "id": "job_3",
-                "company": "Mem0",
-                "role": "Senior ML Engineer",
-                "description": "Build memory AI infrastructure for the next generation of apps.",
-                "salary": "40-60L",
-                "location": location,
-            },
-            {
-                "id": "job_4",
-                "company": "Google DeepMind",
-                "role": "AI Engineer",
-                "description": "Work on fundamental AI research and applications.",
-                "salary": "60-80L",
-                "location": location,
-            },
-            {
-                "id": "job_5",
-                "company": "Meta AI",
-                "role": "Machine Learning Engineer",
-                "description": "Build AI systems used by billions of people.",
-                "salary": "52-72L",
-                "location": location,
-            },
-        ]
-        return jobs
+        """Discover job opportunities via Claude based on role and location."""
+        try:
+            prompt = f"""Generate a list of 5 realistic job opportunities for someone looking for a "{role}" role in "{location}".
+
+Return ONLY a JSON array of objects with these exact keys:
+  id, company, role, description, salary, location
+
+Example format:
+[{{"id": "job_1", "company": "Acme Corp", "role": "Software Engineer", "description": "...", "salary": "30-50L", "location": "{location}"}}]
+
+Base the companies and salaries on real market data for the role and location. Return ONLY the JSON array, no other text."""
+
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=800,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            jobs = json.loads(message.content[0].text)
+            return jobs if isinstance(jobs, list) else []
+        except Exception as e:
+            print(f"Error discovering jobs: {e}")
+            return []
 
     def score_opportunity(self, job: Dict, user_context: Dict) -> int:
         """Score a job opportunity using Claude API"""

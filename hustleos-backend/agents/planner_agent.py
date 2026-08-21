@@ -36,12 +36,12 @@ Return ONLY the JSON array, no other text."""
 
             try:
                 plans = json.loads(message.content[0].text)
-                return plans if isinstance(plans, list) else ["🎯 Continue job search", "📝 Update portfolio", "🚀 Network with peers"]
+                return plans if isinstance(plans, list) else []
             except json.JSONDecodeError:
-                return ["🎯 Continue job search", "📝 Update portfolio", "🚀 Network with peers"]
+                return []
         except Exception as e:
             print(f"Error generating daily plan: {e}")
-            return ["🎯 Apply to 3 jobs", "📝 Follow up with recruiter", "🚀 Practice interview"]
+            return []
 
     def calculate_execution_score(self, user_context: Dict) -> int:
         """Calculate execution score (0-100)"""

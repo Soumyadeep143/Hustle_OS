@@ -1,16 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from models import Application, ApplicationCreateRequest, ApplicationUpdateRequest, MemoryResponse, UserProfile
 from agents import MemoryAgent
+from auth import get_current_user_id
 from typing import Dict
 
 router = APIRouter()
 
-def get_memory_agent() -> MemoryAgent:
-    return MemoryAgent()
+def get_memory_agent(user_id: str = Depends(get_current_user_id)) -> MemoryAgent:
+    return MemoryAgent(user_id=user_id)
 
 @router.get("/", response_model=MemoryResponse)
 async def get_memory(
-    user_id: str = Query("user_default"),
     agent: MemoryAgent = Depends(get_memory_agent),
 ):
     """Get user memory including profile, applications, and insights"""

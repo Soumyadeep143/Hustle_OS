@@ -3,6 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { BottomNav } from '../components/nav/BottomNav';
 import { CaptureFab } from '../components/CaptureFab';
 import { CaptureSheet } from '../components/sheets/CaptureSheet';
+import { RecallCaptureSheet } from '../components/sheets/RecallCaptureSheet';
 import { WorkspaceSheet } from '../components/sheets/WorkspaceSheet';
 import { Toast } from '../components/ui';
 import { VoiceOverlay } from '../screens/Voice';
@@ -23,6 +24,7 @@ export function AppShell() {
       <BottomNav />
       <CaptureFab />
       <CaptureSheet />
+      <RecallCaptureSheet />
       <WorkspaceSheet />
       <Toast />
       <VoiceOverlay />

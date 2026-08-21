@@ -14,11 +14,15 @@ interface UiState {
   voiceOpen: boolean;
   tasks: Task[];
   tasksLoaded: boolean;
+  recallCaptureOpen: boolean;
+  recallCapturePrefillUrl: string;
 
   setWorkspace: (w: Workspace) => void;
   setWorkTab: (t: UiState['workTab']) => void;
   openSheet: (s: Exclude<Sheet, null>) => void;
   closeSheet: () => void;
+  openRecallCapture: (prefillUrl?: string) => void;
+  closeRecallCapture: () => void;
   setTheme: (t: Theme) => void;
   showToast: (msg: string) => void;
   setVoiceOpen: (v: boolean) => void;
@@ -36,11 +40,15 @@ export const useUi = create<UiState>((set, get) => ({
   voiceOpen: false,
   tasks: [],
   tasksLoaded: false,
+  recallCaptureOpen: false,
+  recallCapturePrefillUrl: '',
 
   setWorkspace: (workspace) => set({ workspace, sheet: null }),
   setWorkTab: (workTab) => set({ workTab }),
   openSheet: (sheet) => set({ sheet }),
   closeSheet: () => set({ sheet: null }),
+  openRecallCapture: (prefillUrl = '') => set({ recallCaptureOpen: true, recallCapturePrefillUrl: prefillUrl, sheet: null }),
+  closeRecallCapture: () => set({ recallCaptureOpen: false, recallCapturePrefillUrl: '' }),
   setTheme: (theme) => {
     localStorage.setItem('hustleos-theme', theme);
     document.documentElement.dataset.theme = theme;

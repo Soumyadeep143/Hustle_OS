@@ -5,28 +5,35 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException
 
 from agents import MemoryAgent, TaskStore
+from agents.recall_source import detect_source
+from auth import get_current_user_id
 from models import CaptureCommitRequest, CaptureCommitResponse, CaptureParseRequest, CaptureParseResponse
 
 router = APIRouter()
 
 
-def get_deps() -> Dict:
-    return {"memory": MemoryAgent(), "tasks": TaskStore()}
+def get_deps(user_id: str = Depends(get_current_user_id)) -> Dict:
+    return {"memory": MemoryAgent(user_id=user_id), "tasks": TaskStore()}
 
 
 _JOB_HOSTS = re.compile(r"indeed\.|greenhouse\.io|lever\.co|myworkdayjobs")
 _EVENT_HOSTS = re.compile(r"eventbrite|lu\.ma|meetup\.com|devpost\.com")
 
 
-def _classify(host: str, path: str, is_url: bool) -> tuple[str, str]:
+def _classify(host: str, path: str, is_url: bool, url: str) -> tuple[str, str]:
     if _JOB_HOSTS.search(host) or ("linkedin.com" in host and "/jobs/" in path):
         return "job", "Career -> Internship"
-    if "linkedin.com" in host and "/in/" in path:
-        return "prospect", "Network"
     if "github.com" in host:
         return "repo", "Engineering"
     if _EVENT_HOSTS.search(host):
         return "event", "Event"
+    # A recognized RECALL source (LinkedIn/X/Instagram/Reddit) that isn't
+    # clearly a job posting gets the richer capture-and-remember pipeline
+    # at POST /api/recall/analyze instead of a plain Quick Capture note —
+    # the client routes 'recall'-kind results there.
+    source, _ = detect_source(url)
+    if source != "other":
+        return "recall", "RECALL"
     if is_url:
         return "article", "Knowledge"
     return "note", "General"
@@ -56,7 +63,7 @@ async def parse_capture(request: CaptureParseRequest):
     slug = re.sub(r"\.\w+$", "", slug).strip()
     title = re.sub(r"\b\w", lambda m: m.group().upper(), slug) if slug else "Untitled capture"
 
-    kind, category = _classify(host, path, is_url)
+    kind, category = _classify(host, path, is_url, input_text if is_url else "")
 
     fields = ["title"]
     if host:
@@ -82,10 +89,12 @@ async def parse_capture(request: CaptureParseRequest):
 
 
 @router.post("/commit", response_model=CaptureCommitResponse)
-async def commit_capture(request: CaptureCommitRequest, deps: Dict = Depends(get_deps)):
-    """Creates the real entity for every capture kind except 'prospect', which
-    already has its own richer pipeline at POST /api/recall/prospects (research
-    + scoring) — the client calls that endpoint directly for prospects."""
+async def commit_capture(
+    request: CaptureCommitRequest, user_id: str = Depends(get_current_user_id), deps: Dict = Depends(get_deps)
+):
+    """Creates the real entity for every capture kind except 'recall', which
+    already has its own richer pipeline at POST /api/recall/analyze + /items
+    (source detection + AI enrichment) — the client calls that directly."""
     memory: MemoryAgent = deps["memory"]
     tasks: TaskStore = deps["tasks"]
 
@@ -98,7 +107,7 @@ async def commit_capture(request: CaptureCommitRequest, deps: Dict = Depends(get
             description=request.category or "Captured via Quick Capture",
         )
     elif request.kind == "task":
-        created = tasks.create_task(request.user_id, request.title, request.deadline or None, "normal")
+        created = tasks.create_task(user_id, request.title, request.deadline or None, "normal")
     elif request.kind in ("event", "article", "repo", "note"):
         created = memory.save_capture(
             request.kind,

@@ -1,1 +1,1 @@
-export type Tone = 'blue' | 'yellow' | 'red' | 'neutral';
+export type Tone = 'blue' | 'yellow' | 'green' | 'red' | 'neutral';

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -11,6 +11,7 @@ import {
   type TimelineEntry,
 } from '../services/api';
 import { useUi } from '../store/useUi';
+import { localIsoDate } from '../lib/scheduling';
 import { SectionLabel, TimelineRow, TaskRow, ProgressBar, Chip, StatCell } from '../components/ui';
 import { Button } from '../components/Button';
 import { EditTimelineEntrySheet } from '../components/sheets/EditTimelineEntrySheet';
@@ -25,10 +26,135 @@ function useClock() {
   return now;
 }
 
-function greeting(name: string) {
+// ── Time-of-day config — full 24-hour cycle ────────────────────────────
+const TIME_CONFIG = {
+  midnight: {
+    word: 'midnight',
+    cssClass: 'greeting-time--midnight',
+  },
+  dawn: {
+    word: 'dawn',
+    cssClass: 'greeting-time--dawn',
+  },
+  morning: {
+    word: 'morning',
+    cssClass: 'greeting-time--morning',
+  },
+  midday: {
+    word: 'midday',
+    cssClass: 'greeting-time--midday',
+  },
+  afternoon: {
+    word: 'afternoon',
+    cssClass: 'greeting-time--afternoon',
+  },
+  dusk: {
+    word: 'dusk',
+    cssClass: 'greeting-time--dusk',
+  },
+  evening: {
+    word: 'evening',
+    cssClass: 'greeting-time--evening',
+  },
+  night: {
+    word: 'night',
+    cssClass: 'greeting-time--night',
+  },
+} as const;
+
+type TimePeriod = keyof typeof TIME_CONFIG;
+
+function getTimePeriod(): TimePeriod {
   const h = new Date().getHours();
-  const part = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
-  return `Good ${part}, ${name}.`;
+  if (h >= 0  && h < 4)  return 'midnight';
+  if (h >= 4  && h < 6)  return 'dawn';
+  if (h >= 6  && h < 11) return 'morning';
+  if (h >= 11 && h < 13) return 'midday';
+  if (h >= 13 && h < 17) return 'afternoon';
+  if (h >= 17 && h < 19) return 'dusk';
+  if (h >= 19 && h < 22) return 'evening';
+  return 'night'; // 22–24
+}
+
+// ── Typewriter component ────────────────────────────────────────────────
+function TypingText({
+  text,
+  delay = 0,
+  speed = 68,
+  className = '',
+  onDone,
+}: {
+  text: string;
+  delay?: number;
+  speed?: number;
+  className?: string;
+  onDone?: () => void;
+}) {
+  const [displayed, setDisplayed] = useState('');
+  const [started, setStarted] = useState(false);
+  const [done, setDone] = useState(false);
+  const indexRef = useRef(0);
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
+
+  useEffect(() => {
+    const startTimer = setTimeout(() => setStarted(true), delay);
+    return () => clearTimeout(startTimer);
+  }, [delay]);
+
+  useEffect(() => {
+    if (!started) return;
+    indexRef.current = 0;
+    setDisplayed('');
+    setDone(false);
+
+    const tick = setInterval(() => {
+      indexRef.current += 1;
+      setDisplayed(text.slice(0, indexRef.current));
+      if (indexRef.current >= text.length) {
+        clearInterval(tick);
+        setDone(true);
+        onDoneRef.current?.();
+      }
+    }, speed);
+
+    return () => clearInterval(tick);
+  }, [text, started, speed]);
+
+  return (
+    <span className={className || undefined}>
+      {displayed}
+      {!done && <span className="typing-cursor" aria-hidden="true">|</span>}
+    </span>
+  );
+}
+
+// ── Animated subtitle — word by word ───────────────────────────────────
+const SUBTITLE_WORDS = ["Here's", 'what', 'matters', 'today.'];
+
+function AnimatedSubtitle() {
+  const [visible, setVisible] = useState(0);
+
+  useEffect(() => {
+    // stagger each word in after the greeting finishes (~1.6s total for typing)
+    SUBTITLE_WORDS.forEach((_, i) => {
+      setTimeout(() => setVisible(i + 1), 1600 + i * 110);
+    });
+  }, []);
+
+  return (
+    <p className="greeting-sub mt-1 text-[15px]">
+      {SUBTITLE_WORDS.map((word, i) => (
+        <span
+          key={word}
+          className={`greeting-sub-word${visible > i ? ' visible' : ''}`}
+        >
+          {word}
+          {i < SUBTITLE_WORDS.length - 1 ? '\u00a0' : ''}
+        </span>
+      ))}
+    </p>
+  );
 }
 
 export function Home() {
@@ -78,7 +204,7 @@ function HomePersonal() {
   useEffect(() => {
     api.memory.get().then(setMemory);
     api.home.getBrief().then(setBrief);
-    api.home.getTimeline().then(setTimeline);
+    api.home.getTimeline(localIsoDate()).then(setTimeline);
     api.home.getSignals().then(setSignals);
   }, []);
 
@@ -105,13 +231,50 @@ function HomePersonal() {
   const upsert = <T extends { id: string }>(list: T[], item: T): T[] =>
     list.some((x) => x.id === item.id) ? list.map((x) => (x.id === item.id ? item : x)) : [...list, item];
 
+  const timePeriod = getTimePeriod();
+  const timeConf = TIME_CONFIG[timePeriod];
+  // word lengths → stagger delays
+  // "Good " = 5 chars × 72ms ≈ 360ms  → time word starts at 380ms
+  // time word length × 72ms           → name starts after that
+  const timeWordDelay = 380;
+  const nameDelay = timeWordDelay + timeConf.word.length * 72 + 80;
+
   return (
     <>
-      <div>
-        <h1 className="font-[var(--font-display)] text-[30px] font-semibold leading-[1.1] tracking-[-.028em] text-[var(--color-ink)]">
-          {memory ? greeting(memory.user_profile.name.split(' ')[0]) : 'Good day.'}
+      <div className="greeting-block">
+        <h1 className="greeting-heading font-[var(--font-display)] text-[30px] font-semibold leading-[1.1] tracking-[-.028em] text-[var(--color-ink)]">
+          {memory ? (
+            <>
+              {/* word 1 — "Good " */}
+              <TypingText
+                text="Good "
+                delay={0}
+                speed={72}
+                className="greeting-word greeting-good"
+              />
+              {/* word 2 — "evening" / "morning" / "afternoon" */}
+              <TypingText
+                text={timeConf.word}
+                delay={timeWordDelay}
+                speed={72}
+                className={`greeting-word greeting-time ${timeConf.cssClass}`}
+              />
+              {/* comma + space rendered immediately after time word is done via CSS opacity */}
+              <span className="greeting-comma">,{'\u00a0'}</span>
+              {/* word 3 — first name */}
+              <TypingText
+                text={memory.user_profile.name.split(' ')[0]}
+                delay={nameDelay}
+                speed={68}
+                className="greeting-word greeting-name"
+              />
+              <span className="greeting-period">.</span>
+            </>
+          ) : (
+            <span className="greeting-placeholder">Good day.</span>
+          )}
         </h1>
-        <p className="mt-1 text-[15px] text-[var(--color-ink-2)]">Here's what matters today.</p>
+        <AnimatedSubtitle />
       </div>
 
       <div

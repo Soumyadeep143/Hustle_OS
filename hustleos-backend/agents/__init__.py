@@ -16,6 +16,9 @@ from .capacity_agent import CapacityAgent
 from .recommendation_agent import RecommendationAgent
 from .team_action_agent import TeamActionAgent
 from .home_store import HomeStore
+from .user_store import UserStore
+from .calendar_store import CalendarStore
+from .conversation_store import ConversationStateStore
 
 __all__ = [
     "MemoryAgent",
@@ -37,4 +40,7 @@ __all__ = [
     "RecommendationAgent",
     "TeamActionAgent",
     "HomeStore",
+    "UserStore",
+    "CalendarStore",
+    "ConversationStateStore",
 ]

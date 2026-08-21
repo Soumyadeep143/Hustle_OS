@@ -4,6 +4,7 @@ import clsx from 'clsx';
 const TONE_STYLES: Record<Tone, string> = {
   blue: 'bg-[var(--color-blue-soft)] text-[var(--color-blue)]',
   yellow: 'bg-[var(--color-yellow-soft)] text-[var(--color-yellow)]',
+  green: 'bg-[var(--color-green-soft)] text-[var(--color-green)]',
   red: 'bg-[var(--color-red-soft)] text-[var(--color-red)]',
   neutral: 'bg-[var(--color-line-2)] text-[var(--color-ink-2)]',
 };

@@ -2,6 +2,8 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict
 from datetime import datetime
 
+from .schedule_schemas import ScheduleDraftDto
+
 
 class VoiceTranscribeRequest(BaseModel):
     audio: bytes
@@ -10,11 +12,13 @@ class VoiceTranscribeRequest(BaseModel):
 class VoiceCommandRequest(BaseModel):
     transcript: str
     user_id: str = "user_default"
+    timezone: str = "UTC"
 
 
 class VoiceResponse(BaseModel):
     response: str
     audio_url: Optional[str] = None
+    schedule_draft: Optional[ScheduleDraftDto] = None
 
 
 class Opportunity(BaseModel):

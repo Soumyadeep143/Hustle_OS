@@ -1,141 +1,135 @@
-import json
-import os
-import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
+
+from db.connection import get_cursor
+
+
+def _stringify(row: Dict) -> Dict:
+    """psycopg2 returns native date/datetime objects for date/timestamptz
+    columns; the API layer (Pydantic str fields, JSON) expects strings."""
+    out = dict(row)
+    for k, v in out.items():
+        if isinstance(v, (date, datetime)):
+            out[k] = v.isoformat()
+    return out
 
 
 class RecallStore:
-    """Deterministic structured state for RECALL: prospects, companies,
-    scores, and timeline. Mirrors MemoryAgent's JSON-file persistence
-    pattern — contextual facts live in a MemoryProvider instead, kept
-    separate per the fact-vs-memory split the RECALL design calls for."""
+    """User-scoped, Postgres-backed store for RECALL: user-captured items
+    (recall_items) and their real event timeline (recall_timeline_events).
+    Replaces the old JSON-file prospect/company sales-CRM model entirely —
+    every row here is created by an explicit user capture, never seeded."""
 
-    def __init__(self, store_file: str = "recall_state.json"):
-        self.store_file = store_file
-        self.state = self._load()
+    # Columns writable via create/update — kept as an explicit allowlist so
+    # a stray dict key (e.g. from a Pydantic model with extra fields) can
+    # never reach raw SQL.
+    COLUMNS = [
+        "url", "source", "title", "description", "notes", "ai_summary",
+        "category", "subcategory", "tags", "status", "priority",
+        "company", "person", "location", "event_date",
+        "follow_up_at", "follow_up_note",
+    ]
 
-    def _load(self) -> Dict:
-        if os.path.exists(self.store_file):
-            with open(self.store_file, "r") as f:
-                return json.load(f)
-        return {"prospects": {}, "companies": {}}
+    def __init__(self, user_id: str):
+        self.user_id = user_id
 
-    def _save(self):
-        with open(self.store_file, "w") as f:
-            json.dump(self.state, f, indent=2)
+    def create_item(self, fields: Dict) -> Dict:
+        values = {c: fields.get(c) for c in self.COLUMNS}
+        columns_sql = ", ".join(["user_id"] + self.COLUMNS)
+        placeholders = ", ".join(["%s"] * (len(self.COLUMNS) + 1))
+        with get_cursor() as cur:
+            cur.execute(
+                f"insert into recall_items ({columns_sql}) values ({placeholders}) returning *",
+                (self.user_id, *[values[c] for c in self.COLUMNS]),
+            )
+            row = _stringify(cur.fetchone())
+        return row
 
-    def _now(self) -> str:
-        return datetime.now().isoformat()
+    def get_item(self, item_id: str) -> Optional[Dict]:
+        with get_cursor() as cur:
+            cur.execute(
+                "select * from recall_items where id = %s and user_id = %s",
+                (item_id, self.user_id),
+            )
+            row = cur.fetchone()
+        return _stringify(row) if row else None
 
-    def upsert_company(self, name: str, source_url: Optional[str] = None) -> Dict:
-        for company in self.state["companies"].values():
-            if company["name"].lower() == name.lower():
-                return company
-        company_id = f"company_{uuid.uuid4().hex[:8]}"
-        company = {"id": company_id, "name": name, "source_url": source_url}
-        self.state["companies"][company_id] = company
-        self._save()
-        return company
-
-    def create_prospect(
+    def list_items(
         self,
-        name: str,
-        company: str,
-        role: Optional[str] = None,
-        email: Optional[str] = None,
-        source_url: Optional[str] = None,
-        notes: Optional[str] = None,
-    ) -> Dict:
-        company_obj = self.upsert_company(company, source_url)
-        prospect_id = f"prospect_{uuid.uuid4().hex[:8]}"
-        now = self._now()
-        prospect = {
-            "id": prospect_id,
-            "name": name,
-            "role": role,
-            "company": company_obj["name"],
-            "company_id": company_obj["id"],
-            "email": email,
-            "relationship": "new",
-            "lead_score": 0,
-            "intent": "unknown",
-            "next_best_action": None,
-            "timeline": [
-                {
-                    "id": f"evt_{uuid.uuid4().hex[:8]}",
-                    "label": "Prospect added",
-                    "detail": source_url,
-                    "created_at": now,
-                }
-            ],
-            "created_at": now,
-            "updated_at": now,
-            "source_url": source_url,
-            "notes": notes,
-        }
-        self.state["prospects"][prospect_id] = prospect
-        self._save()
-        return prospect
+        status: Optional[str] = None,
+        category: Optional[str] = None,
+        source: Optional[str] = None,
+    ) -> List[Dict]:
+        query = "select * from recall_items where user_id = %s"
+        params: List = [self.user_id]
+        if status:
+            query += " and status = %s"
+            params.append(status)
+        if category:
+            query += " and category = %s"
+            params.append(category)
+        if source:
+            query += " and source = %s"
+            params.append(source)
+        query += " order by created_at desc"
+        with get_cursor() as cur:
+            cur.execute(query, params)
+            rows = [_stringify(r) for r in cur.fetchall()]
+        return rows
 
-    def get_prospect(self, prospect_id: str) -> Optional[Dict]:
-        return self.state["prospects"].get(prospect_id)
+    def update_item(self, item_id: str, fields: Dict) -> Optional[Dict]:
+        """Partial update. Values may be explicitly None (clearing a field)
+        — callers control which keys are present, not this method."""
+        editable = {k: v for k, v in fields.items() if k in self.COLUMNS + ["related_application_id"]}
+        if not editable:
+            return self.get_item(item_id)
+        set_clause = ", ".join(f"{k} = %s" for k in editable)
+        with get_cursor() as cur:
+            cur.execute(
+                f"""
+                update recall_items set {set_clause}, updated_at = now()
+                where id = %s and user_id = %s
+                returning *
+                """,
+                (*editable.values(), item_id, self.user_id),
+            )
+            row = cur.fetchone()
+        return _stringify(row) if row else None
 
-    def list_prospects(self) -> List[Dict]:
-        return sorted(
-            self.state["prospects"].values(),
-            key=lambda p: p["lead_score"],
-            reverse=True,
-        )
+    def set_follow_up(self, item_id: str, follow_up_at: Optional[str], follow_up_note: Optional[str]) -> Optional[Dict]:
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                update recall_items set follow_up_at = %s, follow_up_note = %s, updated_at = now()
+                where id = %s and user_id = %s
+                returning *
+                """,
+                (follow_up_at, follow_up_note, item_id, self.user_id),
+            )
+            row = cur.fetchone()
+        return _stringify(row) if row else None
 
-    def add_timeline_event(self, prospect_id: str, label: str, detail: Optional[str] = None) -> Optional[Dict]:
-        prospect = self.get_prospect(prospect_id)
-        if not prospect:
-            return None
-        event = {
-            "id": f"evt_{uuid.uuid4().hex[:8]}",
-            "label": label,
-            "detail": detail,
-            "created_at": self._now(),
-        }
-        prospect["timeline"].append(event)
-        prospect["updated_at"] = self._now()
-        self._save()
-        return event
+    def add_timeline_event(self, item_id: str, event_type: str, label: str, detail: Optional[str] = None) -> Dict:
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                insert into recall_timeline_events (recall_item_id, user_id, event_type, label, detail)
+                values (%s, %s, %s, %s, %s)
+                returning *
+                """,
+                (item_id, self.user_id, event_type, label, detail),
+            )
+            row = _stringify(cur.fetchone())
+        return row
 
-    def update_scores(
-        self,
-        prospect_id: str,
-        lead_score: int,
-        intent: str,
-        relationship: Optional[str] = None,
-    ) -> Optional[Dict]:
-        prospect = self.get_prospect(prospect_id)
-        if not prospect:
-            return None
-        prospect["lead_score"] = lead_score
-        prospect["intent"] = intent
-        if relationship:
-            prospect["relationship"] = relationship
-        prospect["updated_at"] = self._now()
-        self._save()
-        return prospect
-
-    def set_next_best_action(self, prospect_id: str, action: str, reason: str) -> Optional[Dict]:
-        prospect = self.get_prospect(prospect_id)
-        if not prospect:
-            return None
-        prospect["next_best_action"] = {
-            "action": action,
-            "reason": reason,
-            "generated_at": self._now(),
-        }
-        prospect["updated_at"] = self._now()
-        self._save()
-        return prospect
-
-    def clear_next_best_action(self, prospect_id: str):
-        prospect = self.get_prospect(prospect_id)
-        if prospect:
-            prospect["next_best_action"] = None
-            self._save()
+    def list_timeline(self, item_id: str) -> List[Dict]:
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                select * from recall_timeline_events
+                where recall_item_id = %s and user_id = %s
+                order by created_at asc
+                """,
+                (item_id, self.user_id),
+            )
+            return [_stringify(r) for r in cur.fetchall()]

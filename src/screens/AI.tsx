@@ -6,8 +6,8 @@ import { useUi } from '../store/useUi';
 const SUGGESTED = [
   "What's my plan today?",
   'Which applications need a follow-up?',
-  'Who are my hottest RECALL prospects?',
-  'Summarize this week so far',
+  'What did I save to RECALL this week?',
+  'What do I have to follow up on today?',
   'What should I do next?',
   'Any deadlines coming up?',
 ];

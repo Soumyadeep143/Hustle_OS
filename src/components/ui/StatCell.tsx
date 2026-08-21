@@ -4,6 +4,7 @@ import clsx from 'clsx';
 const TONE_TEXT: Record<Tone, string> = {
   blue: 'text-[var(--color-blue)]',
   yellow: 'text-[var(--color-yellow)]',
+  green: 'text-[var(--color-green)]',
   red: 'text-[var(--color-red)]',
   neutral: 'text-[var(--color-ink)]',
 };

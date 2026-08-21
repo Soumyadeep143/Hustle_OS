@@ -1,92 +1,136 @@
+from typing import List, Literal, Optional
+
 from pydantic import BaseModel
-from typing import Optional, List, Dict
+
+RecallSource = Literal["linkedin", "x", "instagram", "reddit", "other"]
+RecallStatus = Literal[
+    "saved", "interested", "applied", "following_up", "interview",
+    "responded", "opportunity", "completed", "archived",
+]
+RecallPriority = Literal["low", "medium", "high"]
 
 
-class MemoryFact(BaseModel):
+class RecallTimelineEvent(BaseModel):
     id: str
-    type: str  # "fact" | "inference" | "recommendation" | "action"
-    text: str
-    source_url: Optional[str] = None
-    confidence: Optional[float] = None
-    created_at: str
-
-
-class TimelineEvent(BaseModel):
-    id: str
+    event_type: str
     label: str
     detail: Optional[str] = None
     created_at: str
 
 
-class NextBestAction(BaseModel):
-    action: str
-    reason: str
-    generated_at: str
-
-
-class Prospect(BaseModel):
+class RecallItem(BaseModel):
     id: str
-    name: str
-    role: Optional[str] = None
-    company: str
-    company_id: Optional[str] = None
-    email: Optional[str] = None
-    relationship: str = "new"  # new | engaged | high_intent | won | lost
-    lead_score: int = 0
-    intent: str = "unknown"  # low | medium | high | unknown
-    next_best_action: Optional[NextBestAction] = None
-    memory: List[MemoryFact] = []
-    timeline: List[TimelineEvent] = []
+    user_id: str
+    url: Optional[str] = None
+    source: RecallSource
+    source_display: str
+
+    title: str
+    description: str = ""
+    notes: str = ""
+    ai_summary: Optional[str] = None
+
+    category: str = "Other"
+    subcategory: Optional[str] = None
+    tags: List[str] = []
+
+    status: RecallStatus = "saved"
+    priority: Optional[RecallPriority] = None
+
+    company: Optional[str] = None
+    person: Optional[str] = None
+    location: Optional[str] = None
+    event_date: Optional[str] = None
+
+    follow_up_at: Optional[str] = None
+    follow_up_note: Optional[str] = None
+
+    related_application_id: Optional[str] = None
+
     created_at: str
     updated_at: str
-    source_url: Optional[str] = None
+    timeline: List[RecallTimelineEvent] = []
+
+
+class RecallItemCreateRequest(BaseModel):
+    url: Optional[str] = None
+    title: str
+    description: str = ""
+    notes: str = ""
+    ai_summary: Optional[str] = None
+    category: str = "Other"
+    subcategory: Optional[str] = None
+    tags: List[str] = []
+    status: RecallStatus = "saved"
+    priority: Optional[RecallPriority] = None
+    company: Optional[str] = None
+    person: Optional[str] = None
+    location: Optional[str] = None
+    event_date: Optional[str] = None
+    follow_up_at: Optional[str] = None
+    follow_up_note: Optional[str] = None
+
+
+class RecallItemUpdateRequest(BaseModel):
+    source: Optional[RecallSource] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
     notes: Optional[str] = None
+    ai_summary: Optional[str] = None
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    tags: Optional[List[str]] = None
+    status: Optional[RecallStatus] = None
+    priority: Optional[RecallPriority] = None
+    company: Optional[str] = None
+    person: Optional[str] = None
+    location: Optional[str] = None
+    event_date: Optional[str] = None
+    url: Optional[str] = None
 
 
-class ProspectCreateRequest(BaseModel):
-    name: str
-    company: str
-    role: Optional[str] = None
-    email: Optional[str] = None
-    source_url: Optional[str] = None
-    notes: Optional[str] = None
+class RecallFollowUpRequest(BaseModel):
+    follow_up_at: Optional[str] = None
+    follow_up_note: Optional[str] = None
 
 
-class ProspectSummary(BaseModel):
-    id: str
-    name: str
-    company: str
-    role: Optional[str] = None
-    relationship: str
-    lead_score: int
-    intent: str
-    next_best_action: Optional[str] = None
+class RecallAnalyzeRequest(BaseModel):
+    url: Optional[str] = None
+    description: str = ""
+
+
+class RecallAnalyzeResponse(BaseModel):
+    source: RecallSource
+    source_display: str
+    title: str
+    category: str
+    subcategory: Optional[str] = None
+    ai_summary: Optional[str] = None
+    company: Optional[str] = None
+    person: Optional[str] = None
+    location: Optional[str] = None
+    event_date: Optional[str] = None
+    opportunity: Optional[str] = None
+    status_suggestion: RecallStatus = "saved"
+    priority_suggestion: Optional[RecallPriority] = None
+    potential_action: Optional[str] = None
+    confidence: Literal["High", "Medium", "Low"] = "Medium"
+    extraction_note: Optional[str] = None
+
+
+class RecallRefineNoteRequest(BaseModel):
+    text: str
+
+
+class RecallRefineNoteResponse(BaseModel):
+    text: str
 
 
 class RecallDashboardResponse(BaseModel):
-    total_prospects: int
-    high_intent: int
-    followups_today: int
-    next_best_actions: List[Dict]
-    insights: List[str]
-
-
-class RecallQueryRequest(BaseModel):
-    question: str
-    user_id: str = "user_default"
-
-
-class RecallQueryResponse(BaseModel):
-    answer: str
-    prospect_id: Optional[str] = None
-    grounded: bool = True
-
-
-class RecallActivityEvent(BaseModel):
-    id: str
-    agent: str
-    label: str
-    detail: Optional[str] = None
-    prospect_id: str
-    prospect_name: str
-    created_at: str
+    saved: int
+    applications: int
+    follow_ups: int
+    interviews: int
+    opportunities: int
+    total: int
+    has_data: bool

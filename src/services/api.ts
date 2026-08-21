@@ -1,4 +1,5 @@
 import axios, { type AxiosError, type AxiosInstance } from 'axios';
+import { browserTimezone } from '../lib/scheduling';
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 const DEFAULT_USER_ID = 'user_default';
@@ -12,6 +13,16 @@ export const apiClient: AxiosInstance = axios.create({
   },
 });
 
+export const AUTH_TOKEN_KEY = 'hustleos-token';
+
+apiClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 interface RetryableConfig {
   method?: string;
   __retryCount?: number;
@@ -21,6 +32,12 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const config = error.config as (typeof error.config & RetryableConfig) | undefined;
+
+    if (error.response?.status === 401 && !config?.url?.startsWith('/auth/')) {
+      localStorage.removeItem(AUTH_TOKEN_KEY);
+      window.dispatchEvent(new Event('hustleos:unauthorized'));
+    }
+
     const isServerOrNetworkError = !error.response || error.response.status >= 500;
     const isGet = config?.method?.toLowerCase() === 'get';
 
@@ -75,6 +92,7 @@ export function getErrorMessage(error: unknown): string {
 export interface VoiceResponse {
   response: string;
   audio_url?: string | null;
+  schedule_draft?: ScheduleDraft | null;
 }
 
 export interface TranscribeResponse {
@@ -118,6 +136,17 @@ export interface Application {
   notes?: string | null;
 }
 
+export interface AuthUser {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
 export interface UserProfile {
   name: string;
   email: string;
@@ -141,105 +170,123 @@ export interface DashboardResponse {
   metrics: Record<string, number>;
 }
 
-export interface RecallMemoryFact {
-  id: string;
-  type: string;
-  text: string;
-  source_url?: string | null;
-  confidence?: number | null;
-  created_at: string;
-}
+export type RecallSource = 'linkedin' | 'x' | 'instagram' | 'reddit' | 'other';
+export type RecallStatus =
+  | 'saved'
+  | 'interested'
+  | 'applied'
+  | 'following_up'
+  | 'interview'
+  | 'responded'
+  | 'opportunity'
+  | 'completed'
+  | 'archived';
+export type RecallPriority = 'low' | 'medium' | 'high';
 
 export interface RecallTimelineEvent {
   id: string;
+  event_type: string;
   label: string;
   detail?: string | null;
   created_at: string;
 }
 
-export interface RecallNextBestAction {
-  action: string;
-  reason: string;
-  generated_at: string;
-}
-
-export interface RecallProspect {
+export interface RecallItem {
   id: string;
-  name: string;
-  role?: string | null;
-  company: string;
-  company_id?: string | null;
-  email?: string | null;
-  relationship: string;
-  lead_score: number;
-  intent: string;
-  next_best_action?: RecallNextBestAction | null;
-  memory: RecallMemoryFact[];
-  timeline: RecallTimelineEvent[];
+  user_id: string;
+  url?: string | null;
+  source: RecallSource;
+  source_display: string;
+  title: string;
+  description: string;
+  notes: string;
+  ai_summary?: string | null;
+  category: string;
+  subcategory?: string | null;
+  tags: string[];
+  status: RecallStatus;
+  priority?: RecallPriority | null;
+  company?: string | null;
+  person?: string | null;
+  location?: string | null;
+  event_date?: string | null;
+  follow_up_at?: string | null;
+  follow_up_note?: string | null;
+  related_application_id?: string | null;
   created_at: string;
   updated_at: string;
-  source_url?: string | null;
-  notes?: string | null;
+  timeline: RecallTimelineEvent[];
 }
 
-export interface RecallProspectSummary {
-  id: string;
-  name: string;
-  company: string;
-  role?: string | null;
-  relationship: string;
-  lead_score: number;
-  intent: string;
-  next_best_action?: string | null;
-}
-
-export interface RecallProspectCreateRequest {
-  name: string;
-  company: string;
-  role?: string;
-  email?: string;
-  source_url?: string;
+export interface RecallItemCreateRequest {
+  url?: string;
+  title: string;
+  description?: string;
   notes?: string;
+  ai_summary?: string;
+  category?: string;
+  subcategory?: string;
+  tags?: string[];
+  status?: RecallStatus;
+  priority?: RecallPriority | null;
+  company?: string;
+  person?: string;
+  location?: string;
+  event_date?: string;
+  follow_up_at?: string;
+  follow_up_note?: string;
+}
+
+export interface RecallItemUpdateRequest {
+  source?: RecallSource;
+  title?: string;
+  description?: string;
+  notes?: string;
+  ai_summary?: string | null;
+  category?: string;
+  subcategory?: string | null;
+  tags?: string[];
+  status?: RecallStatus;
+  priority?: RecallPriority | null;
+  company?: string | null;
+  person?: string | null;
+  location?: string | null;
+  event_date?: string | null;
+  url?: string | null;
+}
+
+export interface RecallAnalyzeRequest {
+  url?: string;
+  description?: string;
+}
+
+export interface RecallAnalyzeResponse {
+  source: RecallSource;
+  source_display: string;
+  title: string;
+  category: string;
+  subcategory?: string | null;
+  ai_summary?: string | null;
+  company?: string | null;
+  person?: string | null;
+  location?: string | null;
+  event_date?: string | null;
+  opportunity?: string | null;
+  status_suggestion: RecallStatus;
+  priority_suggestion?: RecallPriority | null;
+  potential_action?: string | null;
+  confidence: 'High' | 'Medium' | 'Low';
+  extraction_note?: string | null;
 }
 
 export interface RecallDashboardResponse {
-  total_prospects: number;
-  high_intent: number;
-  followups_today: number;
-  next_best_actions: Array<{ prospect_id: string; name: string; action: string }>;
-  insights: string[];
-}
-
-export type RecallExecuteAgent = 'memory' | 'execution' | 'strategy';
-
-export interface RecallExecuteEvent {
-  agent: RecallExecuteAgent;
-  status: 'running' | 'done';
-  detail?: string;
-}
-
-export interface RecallExecuteResult {
-  agent: 'result';
-  status: 'done';
-  prospect: RecallProspect;
-  result: string;
-  executed_by: string;
-}
-
-export interface RecallQueryResponse {
-  answer: string;
-  prospect_id?: string | null;
-  grounded: boolean;
-}
-
-export interface RecallActivityEvent {
-  id: string;
-  agent: string;
-  label: string;
-  detail?: string | null;
-  prospect_id: string;
-  prospect_name: string;
-  created_at: string;
+  saved: number;
+  applications: number;
+  follow_ups: number;
+  interviews: number;
+  opportunities: number;
+  total: number;
+  has_data: boolean;
 }
 
 export interface Task {
@@ -252,7 +299,7 @@ export interface Task {
   created_at: string;
 }
 
-export type CaptureKind = 'job' | 'event' | 'repo' | 'article' | 'prospect' | 'note' | 'task';
+export type CaptureKind = 'job' | 'event' | 'repo' | 'article' | 'recall' | 'note' | 'task';
 
 export interface CaptureParseResponse {
   kind: CaptureKind;
@@ -267,7 +314,7 @@ export interface CaptureParseResponse {
 }
 
 export interface CaptureCommitRequest {
-  kind: Exclude<CaptureKind, 'prospect'>;
+  kind: Exclude<CaptureKind, 'recall'>;
   title: string;
   org?: string;
   location?: string;
@@ -492,16 +539,83 @@ export interface Integration {
 
 // ---- Home: TODAY timeline, SIGNALS, AI Brief — real editable records, not derived views ----
 
+export type ItemType = 'task' | 'event' | 'interview' | 'follow_up' | 'reminder' | 'deadline';
+export type Priority = 'highest' | 'high' | 'medium' | 'low' | 'none';
+export type CalendarTarget = 'none' | 'google';
+
 export interface TimelineEntry {
   id: string;
   user_id: string;
   at: string;
   title: string;
   subtitle?: string | null;
-  tone: 'blue' | 'red' | 'neutral';
+  tone: 'blue' | 'red' | 'yellow' | 'green' | 'neutral';
   flag?: string | null;
+  item_type: ItemType;
+  priority: Priority;
+  scheduled_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  all_day: boolean;
+  duration_minutes?: number | null;
+  reminder_minutes_before?: number | null;
+  timezone?: string | null;
+  calendar_target: CalendarTarget;
+  calendar_event_id?: string | null;
+  calendar_synced_at?: string | null;
+  notes?: string | null;
+  original_phrase?: string | null;
+  completed: boolean;
+  completed_at?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface TimelineEntryInput {
+  title: string;
+  subtitle?: string;
+  item_type?: ItemType;
+  priority?: Priority;
+  scheduled_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  all_day?: boolean;
+  duration_minutes?: number | null;
+  reminder_minutes_before?: number | null;
+  timezone?: string;
+  calendar_target?: CalendarTarget;
+  notes?: string;
+  original_phrase?: string;
+}
+
+export interface TimelineEntryUpdateInput extends Partial<TimelineEntryInput> {
+  completed?: boolean;
+  clear_scheduled_date?: boolean;
+  clear_start_time?: boolean;
+  clear_end_time?: boolean;
+}
+
+export interface ScheduleDraft {
+  item_type: ItemType;
+  title: string;
+  priority: Priority;
+  date: string | null;
+  date_phrase?: string | null;
+  time_specified: boolean;
+  start_time: string | null;
+  end_time: string | null;
+  all_day: boolean;
+  duration_minutes: number | null;
+  reminder_minutes_before: number | null;
+  original_phrase: string;
+  ambiguous: boolean;
+  ambiguity_reason?: string | null;
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface CalendarSyncResponse {
+  synced: boolean;
+  message: string;
 }
 
 export interface Signal {
@@ -521,6 +635,21 @@ export interface Brief {
 }
 
 export const api = {
+  auth: {
+    signup: async (name: string, email: string, password: string): Promise<AuthResponse> => {
+      const { data } = await apiClient.post<AuthResponse>('/auth/signup', { name, email, password });
+      return data;
+    },
+    login: async (email: string, password: string): Promise<AuthResponse> => {
+      const { data } = await apiClient.post<AuthResponse>('/auth/login', { email, password });
+      return data;
+    },
+    me: async (): Promise<AuthUser> => {
+      const { data } = await apiClient.get<AuthUser>('/auth/me');
+      return data;
+    },
+  },
+
   voice: {
     transcribe: async (audio: Blob): Promise<TranscribeResponse> => {
       const formData = new FormData();
@@ -530,11 +659,8 @@ export const api = {
       });
       return data;
     },
-    command: async (transcript: string, userId: string = DEFAULT_USER_ID): Promise<VoiceResponse> => {
-      const { data } = await apiClient.post<VoiceResponse>('/voice/command', {
-        transcript,
-        user_id: userId,
-      });
+    command: async (transcript: string, timezone: string = browserTimezone()): Promise<VoiceResponse> => {
+      const { data } = await apiClient.post<VoiceResponse>('/voice/command', { transcript, timezone });
       return data;
     },
     tts: async (text: string): Promise<{ audio_url: string | null }> => {
@@ -617,34 +743,51 @@ export const api = {
   },
 
   recall: {
-    listProspects: async (): Promise<RecallProspectSummary[]> => {
-      const { data } = await apiClient.get<RecallProspectSummary[]>('/recall/prospects');
+    analyze: async (request: RecallAnalyzeRequest): Promise<RecallAnalyzeResponse> => {
+      const { data } = await apiClient.post<RecallAnalyzeResponse>('/recall/analyze', request);
       return data;
     },
-    getProspect: async (id: string): Promise<RecallProspect> => {
-      const { data } = await apiClient.get<RecallProspect>(`/recall/prospects/${id}`);
+    refineNote: async (text: string): Promise<string> => {
+      const { data } = await apiClient.post<{ text: string }>('/recall/refine-note', { text });
+      return data.text;
+    },
+    create: async (request: RecallItemCreateRequest): Promise<RecallItem> => {
+      const { data } = await apiClient.post<RecallItem>('/recall/items', request);
       return data;
     },
-    createProspect: async (request: RecallProspectCreateRequest): Promise<RecallProspect> => {
-      const { data } = await apiClient.post<RecallProspect>('/recall/prospects', request);
+    list: async (params?: { status?: string; category?: string; source?: string }): Promise<RecallItem[]> => {
+      const { data } = await apiClient.get<RecallItem[]>('/recall/items', { params });
       return data;
     },
-    execute: async (
+    get: async (id: string): Promise<RecallItem> => {
+      const { data } = await apiClient.get<RecallItem>(`/recall/items/${id}`);
+      return data;
+    },
+    update: async (id: string, updates: RecallItemUpdateRequest): Promise<RecallItem> => {
+      const { data } = await apiClient.patch<RecallItem>(`/recall/items/${id}`, updates);
+      return data;
+    },
+    setFollowUp: async (
       id: string,
-      onEvent: (event: RecallExecuteEvent | RecallExecuteResult) => void
-    ): Promise<void> => consumeSSE(`${API_URL}/api/recall/prospects/${id}/execute`, onEvent),
+      followUpAt: string | null,
+      followUpNote: string | null
+    ): Promise<RecallItem> => {
+      const { data } = await apiClient.post<RecallItem>(`/recall/items/${id}/follow-up`, {
+        follow_up_at: followUpAt,
+        follow_up_note: followUpNote,
+      });
+      return data;
+    },
+    markApplied: async (id: string): Promise<RecallItem> => {
+      const { data } = await apiClient.post<RecallItem>(`/recall/items/${id}/mark-applied`);
+      return data;
+    },
+    archive: async (id: string): Promise<RecallItem> => {
+      const { data } = await apiClient.post<RecallItem>(`/recall/items/${id}/archive`);
+      return data;
+    },
     getDashboard: async (): Promise<RecallDashboardResponse> => {
       const { data } = await apiClient.get<RecallDashboardResponse>('/recall/dashboard');
-      return data;
-    },
-    query: async (question: string): Promise<RecallQueryResponse> => {
-      const { data } = await apiClient.post<RecallQueryResponse>('/recall/query', { question });
-      return data;
-    },
-    getActivity: async (limit: number = 20): Promise<RecallActivityEvent[]> => {
-      const { data } = await apiClient.get<RecallActivityEvent[]>('/recall/activity', {
-        params: { limit },
-      });
       return data;
     },
   },
@@ -800,30 +943,44 @@ export const api = {
       );
       return { key: data.key, name: key, connected: data.connected };
     },
+    calendarAuthUrl: async (): Promise<{ configured: boolean; url: string | null }> => {
+      const { data } = await apiClient.get<{ configured: boolean; url: string | null }>(
+        '/integrations/calendar/auth-url'
+      );
+      return data;
+    },
+    calendarDisconnect: async (): Promise<{ connected: boolean }> => {
+      const { data } = await apiClient.post<{ connected: boolean }>('/integrations/calendar/disconnect');
+      return data;
+    },
+  },
+
+  schedule: {
+    parse: async (text: string, timezone: string = browserTimezone()): Promise<ScheduleDraft> => {
+      const { data } = await apiClient.post<ScheduleDraft>('/schedule/parse', { text, timezone });
+      return data;
+    },
+    syncCalendar: async (entryId: string): Promise<CalendarSyncResponse> => {
+      const { data } = await apiClient.post<CalendarSyncResponse>(`/schedule/${entryId}/sync-calendar`);
+      return data;
+    },
   },
 
   home: {
-    getTimeline: async (userId: string = DEFAULT_USER_ID): Promise<TimelineEntry[]> => {
-      const { data } = await apiClient.get<TimelineEntry[]>('/home/timeline', { params: { user_id: userId } });
+    getTimeline: async (date?: string): Promise<TimelineEntry[]> => {
+      const { data } = await apiClient.get<TimelineEntry[]>('/home/timeline', { params: date ? { date } : undefined });
       return data;
     },
-    addTimelineEntry: async (
-      entry: { title: string; at?: string; subtitle?: string; tone?: string; flag?: string },
-      userId: string = DEFAULT_USER_ID
-    ): Promise<TimelineEntry> => {
-      const { data } = await apiClient.post<TimelineEntry>('/home/timeline', { ...entry, user_id: userId });
+    addTimelineEntry: async (entry: TimelineEntryInput): Promise<TimelineEntry> => {
+      const { data } = await apiClient.post<TimelineEntry>('/home/timeline', entry);
       return data;
     },
-    updateTimelineEntry: async (
-      id: string,
-      updates: Partial<{ title: string; at: string; subtitle: string; tone: string; flag: string | null }>,
-      userId: string = DEFAULT_USER_ID
-    ): Promise<TimelineEntry> => {
-      const { data } = await apiClient.patch<TimelineEntry>(`/home/timeline/${id}`, updates, { params: { user_id: userId } });
+    updateTimelineEntry: async (id: string, updates: TimelineEntryUpdateInput): Promise<TimelineEntry> => {
+      const { data } = await apiClient.patch<TimelineEntry>(`/home/timeline/${id}`, updates);
       return data;
     },
-    deleteTimelineEntry: async (id: string, userId: string = DEFAULT_USER_ID): Promise<void> => {
-      await apiClient.delete(`/home/timeline/${id}`, { params: { user_id: userId } });
+    deleteTimelineEntry: async (id: string): Promise<void> => {
+      await apiClient.delete(`/home/timeline/${id}`);
     },
 
     getSignals: async (userId: string = DEFAULT_USER_ID): Promise<Signal[]> => {

@@ -66,20 +66,24 @@ export function useVoiceSession() {
           url = ttsResult.audio_url;
         }
 
+        // Continuous conversation: once the response finishes playing, go
+        // straight back into listening instead of idling — the session only
+        // truly ends when the user taps the X/End button (teardown bumps
+        // epoch, so this restart is a no-op if that already happened).
         if (url) {
           setState('speaking');
           const el = new Audio(url);
           audioEl.current = el;
           el.onended = () => {
-            if (epoch.current === myEpoch) setState('idle');
+            if (epoch.current === myEpoch) void start();
           };
           await el.play().catch(() => {
-            if (epoch.current === myEpoch) setState('idle');
+            if (epoch.current === myEpoch) void start();
           });
         } else {
           setState('speaking');
           window.setTimeout(() => {
-            if (epoch.current === myEpoch) setState('idle');
+            if (epoch.current === myEpoch) void start();
           }, 1800);
         }
       } catch (e) {

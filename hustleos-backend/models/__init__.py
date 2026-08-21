@@ -14,16 +14,16 @@ from .schemas import (
     TTSRequest,
 )
 from .recall_schemas import (
-    MemoryFact,
-    TimelineEvent,
-    NextBestAction,
-    Prospect,
-    ProspectCreateRequest,
-    ProspectSummary,
+    RecallTimelineEvent,
+    RecallItem,
+    RecallItemCreateRequest,
+    RecallItemUpdateRequest,
+    RecallFollowUpRequest,
+    RecallAnalyzeRequest,
+    RecallAnalyzeResponse,
+    RecallRefineNoteRequest,
+    RecallRefineNoteResponse,
     RecallDashboardResponse,
-    RecallQueryRequest,
-    RecallQueryResponse,
-    RecallActivityEvent,
 )
 from .task_schemas import Task, TaskCreateRequest, TaskUpdateRequest
 from .capture_schemas import (
@@ -80,6 +80,17 @@ from .home_schemas import (
     Brief,
     BriefUpdateRequest,
 )
+from .auth_schemas import (
+    SignupRequest,
+    LoginRequest,
+    AuthUser,
+    AuthResponse,
+)
+from .schedule_schemas import (
+    ScheduleParseRequest,
+    ScheduleDraftDto,
+    CalendarSyncResponse,
+)
 
 __all__ = [
     "VoiceTranscribeRequest",
@@ -95,16 +106,16 @@ __all__ = [
     "MemoryResponse",
     "DashboardResponse",
     "TTSRequest",
-    "MemoryFact",
-    "TimelineEvent",
-    "NextBestAction",
-    "Prospect",
-    "ProspectCreateRequest",
-    "ProspectSummary",
+    "RecallTimelineEvent",
+    "RecallItem",
+    "RecallItemCreateRequest",
+    "RecallItemUpdateRequest",
+    "RecallFollowUpRequest",
+    "RecallAnalyzeRequest",
+    "RecallAnalyzeResponse",
+    "RecallRefineNoteRequest",
+    "RecallRefineNoteResponse",
     "RecallDashboardResponse",
-    "RecallQueryRequest",
-    "RecallQueryResponse",
-    "RecallActivityEvent",
     "Task",
     "TaskCreateRequest",
     "TaskUpdateRequest",
@@ -155,4 +166,11 @@ __all__ = [
     "SignalUpdateRequest",
     "Brief",
     "BriefUpdateRequest",
+    "SignupRequest",
+    "LoginRequest",
+    "AuthUser",
+    "AuthResponse",
+    "ScheduleParseRequest",
+    "ScheduleDraftDto",
+    "CalendarSyncResponse",
 ]

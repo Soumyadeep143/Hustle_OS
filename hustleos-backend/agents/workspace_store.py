@@ -26,19 +26,10 @@ class WorkspaceStore:
     def _defaults(self) -> Dict:
         state = {
             "org_health": {
-                "execution_health": 91,
-                "delta": "+4 pts",
-                "rows": [
-                    {"label": "Projects at risk", "value": "2", "tone": "red"},
-                    {"label": "Critical blockers", "value": "3", "tone": "red"},
-                    {"label": "Teams overloaded", "value": "1", "tone": "yellow"},
-                    {"label": "Shipped this month", "value": "12", "tone": None},
-                ],
-                "insight_lines": [
-                    {"text": "Execution health is trending up across all teams this quarter.", "tone": None},
-                    {"text": "Two projects are at risk of missing their deadline this sprint.", "tone": "red"},
-                    {"text": "Consider reallocating QA capacity to the platform team.", "tone": None},
-                ],
+                "execution_health": 0,
+                "delta": "",
+                "rows": [],
+                "insight_lines": [],
             },
         }
         with open(self.store_file, "w") as f:

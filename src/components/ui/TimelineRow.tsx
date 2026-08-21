@@ -5,6 +5,7 @@ import clsx from 'clsx';
 const DOT_TONE: Record<Tone, string> = {
   blue: 'bg-[var(--color-blue)]',
   yellow: 'bg-[var(--color-yellow-ink)]',
+  green: 'bg-[var(--color-green-ink)]',
   red: 'bg-[var(--color-red)]',
   neutral: 'bg-[var(--color-ink-3)]',
 };

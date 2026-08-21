@@ -1,9 +1,8 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Briefcase, Radar, Sparkles, User } from 'lucide-react';
+import { Home, Radar, Sparkles, User } from 'lucide-react';
 
 const TABS = [
   { to: '/', label: 'Home', Icon: Home },
-  { to: '/work', label: 'Work', Icon: Briefcase },
   { to: '/recall', label: 'Recall', Icon: Radar },
   { to: '/ai', label: 'AI', Icon: Sparkles },
   { to: '/profile', label: 'Profile', Icon: User },

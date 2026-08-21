@@ -2,7 +2,11 @@ import { Check } from 'lucide-react';
 import { Sheet } from '../ui/Sheet';
 import { useUi, type Workspace } from '../../store/useUi';
 
-const OPTIONS: Workspace[] = ['Personal', 'Team', 'Enterprise'];
+// Team/Enterprise workspaces are disabled for now — HustleOS is scoped to
+// personal use. The rendering code for both (Home.tsx's HomeTeam/HomeEnterprise,
+// the /team routes) is untouched on disk, just unreachable with only one
+// selectable option here.
+const OPTIONS: Workspace[] = ['Personal'];
 
 export function WorkspaceSheet() {
   const sheet = useUi((s) => s.sheet);

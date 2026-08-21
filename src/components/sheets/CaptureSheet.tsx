@@ -14,7 +14,7 @@ const MANUAL_KINDS: { kind: CaptureKind; label: string; tone: string }[] = [
   { kind: 'event', label: 'Add event', tone: 'var(--color-yellow-ink)' },
   { kind: 'article', label: 'Save knowledge', tone: 'var(--color-yellow-ink)' },
   { kind: 'note', label: 'Add note', tone: 'var(--color-ink-3)' },
-  { kind: 'prospect', label: 'Add prospect', tone: 'var(--color-red)' },
+  { kind: 'recall', label: 'Save to RECALL', tone: 'var(--color-red)' },
 ];
 
 export function CaptureSheet() {
@@ -23,6 +23,7 @@ export function CaptureSheet() {
   const showToast = useUi((s) => s.showToast);
   const addTask = useUi((s) => s.addTask);
   const setVoiceOpen = useUi((s) => s.setVoiceOpen);
+  const openRecallCapture = useUi((s) => s.openRecallCapture);
 
   const [text, setText] = useState('');
   const [phase, setPhase] = useState<Phase>('idle');
@@ -50,6 +51,11 @@ export function CaptureSheet() {
     setError(null);
     try {
       const parsed = await api.capture.parse(input);
+      if (parsed.kind === 'recall') {
+        handleClose();
+        openRecallCapture(parsed.source_url || input);
+        return;
+      }
       setResult(parsed);
       setPhase('result');
     } catch {
@@ -59,6 +65,12 @@ export function CaptureSheet() {
   };
 
   const handleManualCapture = (kind: CaptureKind) => {
+    if (kind === 'recall') {
+      const isUrl = /^https?:\/\//i.test(text.trim());
+      handleClose();
+      openRecallCapture(isUrl ? text.trim() : '');
+      return;
+    }
     setResult({
       kind,
       title: '',
@@ -74,17 +86,10 @@ export function CaptureSheet() {
   };
 
   const handleSave = async () => {
-    if (!result) return;
+    if (!result || result.kind === 'recall') return;
     setSaving(true);
     try {
-      if (result.kind === 'prospect') {
-        await api.recall.createProspect({
-          name: result.title || 'Untitled prospect',
-          company: result.org || 'Unknown',
-          source_url: result.source_url || undefined,
-        });
-        showToast('Saved to RECALL · Prospects');
-      } else if (result.kind === 'task') {
+      if (result.kind === 'task') {
         await addTask(result.title || 'Untitled task', result.deadline || undefined, 'normal');
         showToast('Saved to Work · Tasks');
       } else {
