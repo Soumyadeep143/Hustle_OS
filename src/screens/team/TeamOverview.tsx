@@ -85,11 +85,13 @@ export function TeamOverview() {
 
   return (
     <div className="flex flex-col gap-6 px-5 pt-6 pb-4">
-      <div className="flex items-center justify-between">
-        <h1 className="font-[var(--font-display)] text-[27px] font-semibold text-[var(--color-ink)]">{state.team_name}</h1>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="min-w-0 truncate font-[var(--font-display)] text-[27px] font-semibold text-[var(--color-ink)]">
+          {state.team_name}
+        </h1>
         <button
           onClick={() => setShowAddMember(true)}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[var(--color-line)] text-[var(--color-ink-2)]"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-[var(--color-line)] text-[var(--color-ink-2)]"
         >
           <Plus size={18} />
         </button>
@@ -149,9 +151,11 @@ export function TeamOverview() {
               onClick={() => navigate(`/team/projects/${p.id}`)}
               className="rounded-[var(--radius-card)] border border-[var(--color-line)] p-3.5 text-left"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[14.5px] font-medium text-[var(--color-ink)]">{p.name}</span>
-                <Chip tone={RISK_TONE[p.risk_level]}>{RISK_LABEL[p.risk_level]}</Chip>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium text-[var(--color-ink)]">{p.name}</span>
+                <span className="shrink-0">
+                  <Chip tone={RISK_TONE[p.risk_level]}>{RISK_LABEL[p.risk_level]}</Chip>
+                </span>
               </div>
               <p className="mt-1 text-[12px] text-[var(--color-ink-2)]">{p.basis}</p>
               <div className="mt-2">

@@ -47,9 +47,13 @@ export function ProjectDetail() {
       <BackLink onClick={() => navigate('/team')} />
 
       <div>
-        <div className="flex items-center justify-between">
-          <h1 className="font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">{project.name}</h1>
-          <Chip tone={RISK_TONE[project.risk_level]}>{RISK_LABEL[project.risk_level]}</Chip>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="min-w-0 truncate font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">
+            {project.name}
+          </h1>
+          <span className="shrink-0">
+            <Chip tone={RISK_TONE[project.risk_level]}>{RISK_LABEL[project.risk_level]}</Chip>
+          </span>
         </div>
         <div className="mt-3 flex items-end justify-between">
           <span className="font-[var(--font-display)] text-[40px] font-semibold leading-none tracking-[-.03em] text-[var(--color-ink)]">
@@ -92,9 +96,11 @@ export function ProjectDetail() {
               onClick={() => navigate(`/team/features/${f.id}`)}
               className="rounded-[var(--radius-card)] border border-[var(--color-line)] p-3.5 text-left"
             >
-              <div className="flex items-center justify-between">
-                <span className="text-[14.5px] font-medium text-[var(--color-ink)]">{f.name}</span>
-                <Chip tone={RISK_TONE[f.risk_level]}>{RISK_LABEL[f.risk_level]}</Chip>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-[14.5px] font-medium text-[var(--color-ink)]">{f.name}</span>
+                <span className="shrink-0">
+                  <Chip tone={RISK_TONE[f.risk_level]}>{RISK_LABEL[f.risk_level]}</Chip>
+                </span>
               </div>
               <p className="mt-1 text-[12px] text-[var(--color-ink-2)]">
                 {f.done} of {f.total} tasks{f.blocked_count > 0 ? ` · ${f.blocked_count} blocked` : ''}

@@ -51,9 +51,13 @@ export function FeatureDetail() {
       <BackLink onClick={() => navigate(`/team/projects/${feature.project_id}`)} />
 
       <div>
-        <div className="flex items-center justify-between">
-          <h1 className="font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">{feature.name}</h1>
-          <Chip tone={RISK_TONE[feature.risk_level]}>{RISK_LABEL[feature.risk_level]}</Chip>
+        <div className="flex items-center justify-between gap-2">
+          <h1 className="min-w-0 truncate font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">
+            {feature.name}
+          </h1>
+          <span className="shrink-0">
+            <Chip tone={RISK_TONE[feature.risk_level]}>{RISK_LABEL[feature.risk_level]}</Chip>
+          </span>
         </div>
         <div className="mt-3 flex items-end justify-between">
           <span className="font-[var(--font-display)] text-[40px] font-semibold leading-none tracking-[-.03em] text-[var(--color-ink)]">
@@ -87,11 +91,11 @@ export function FeatureDetail() {
           <SectionLabel>RESPONSIBLE MEMBERS</SectionLabel>
           <div className="mt-3 flex flex-col gap-1.5">
             {feature.responsible_members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between text-[13.5px] text-[var(--color-ink)]">
-                <span>
+              <div key={m.id} className="flex items-center justify-between gap-2 text-[13.5px] text-[var(--color-ink)]">
+                <span className="min-w-0 truncate">
                   {m.name} <span className="text-[var(--color-ink-2)]">· {m.role}</span>
                 </span>
-                <span className="text-[12px] text-[var(--color-ink-2)]">{m.remaining_capacity}h free</span>
+                <span className="shrink-0 text-[12px] text-[var(--color-ink-2)]">{m.remaining_capacity}h free</span>
               </div>
             ))}
           </div>

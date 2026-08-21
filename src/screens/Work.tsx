@@ -113,9 +113,9 @@ export function Work() {
         <div className="flex flex-col gap-4">
           {projects.map((p) => (
             <button key={p.id} onClick={() => navigate(`/team/projects/${p.id}`)} className="text-left">
-              <div className="flex items-center justify-between">
-                <span className="text-[15.5px] font-medium text-[var(--color-ink)]">{p.name}</span>
-                <span className="font-[var(--font-mono)] text-[12px] text-[var(--color-ink-2)]">{p.percent}%</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="min-w-0 flex-1 truncate text-[15.5px] font-medium text-[var(--color-ink)]">{p.name}</span>
+                <span className="shrink-0 font-[var(--font-mono)] text-[12px] text-[var(--color-ink-2)]">{p.percent}%</span>
               </div>
               <p className="mt-0.5 text-[12.5px] text-[var(--color-ink-2)]">
                 {p.done} of {p.total} tasks · {p.risk_level === 'unknown' ? 'no deadline' : `${p.risk_level} risk`}
