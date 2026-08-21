@@ -100,6 +100,19 @@ export function RecallDetail() {
           <Chip tone={statusChip.tone}>{statusChip.label}</Chip>
           {priority && <Chip tone={priority.tone}>{priority.label} PRIORITY</Chip>}
         </div>
+        {item.tags.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {item.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full px-2.5 py-1 text-[12px] font-medium"
+                style={{ background: 'var(--color-blue-soft)', color: 'var(--color-blue)' }}
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {item.description && (

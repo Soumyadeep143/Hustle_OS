@@ -65,6 +65,7 @@ async def analyze(request: RecallAnalyzeRequest, deps: Dict = Depends(get_deps))
         potential_action=suggestion.get("potential_action"),
         confidence=enrichment.get("confidence", "Medium"),
         extraction_note=enrichment.get("extraction_note"),
+        tags=enrichment.get("tags") or [],
     )
 
 

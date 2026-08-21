@@ -277,6 +277,7 @@ export interface RecallAnalyzeResponse {
   potential_action?: string | null;
   confidence: 'High' | 'Medium' | 'Low';
   extraction_note?: string | null;
+  tags: string[];
 }
 
 export interface RecallDashboardResponse {

@@ -1,8 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { Home, Radar, Sparkles, User } from 'lucide-react';
+import { Home, Briefcase, Radar, Sparkles, User } from 'lucide-react';
 
 const TABS = [
   { to: '/', label: 'Home', Icon: Home },
+  { to: '/work', label: 'Work', Icon: Briefcase },
   { to: '/recall', label: 'Recall', Icon: Radar },
   { to: '/ai', label: 'AI', Icon: Sparkles },
   { to: '/profile', label: 'Profile', Icon: User },
@@ -20,7 +21,7 @@ export function BottomNav() {
           nav visibly detaches from the content above it on anything wider
           than a phone. */}
       <div
-        className="mx-auto grid max-w-[480px] grid-cols-4 px-1.5 pt-[9px]"
+        className="mx-auto grid max-w-[480px] grid-cols-5 px-1.5 pt-[9px]"
         style={{ paddingBottom: 'max(26px, env(safe-area-inset-bottom))' }}
       >
         {TABS.map(({ to, label, Icon }) => (

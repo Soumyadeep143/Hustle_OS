@@ -52,7 +52,8 @@ Return ONLY a JSON object with these keys:
 - location: or null
 - event_date: or null — only if a date is actually stated
 - opportunity: one short sentence on why this might matter to the user, or null if unclear
-- confidence: "High" if the description is specific, "Medium" if partial, "Low" if there's almost nothing to go on"""
+- confidence: "High" if the description is specific, "Medium" if partial, "Low" if there's almost nothing to go on
+- tags: a JSON array of 2-5 short, lowercase, single-or-two-word tags for organizing this capture (e.g. ["ai-engineer", "remote", "series-b"]) grounded only in the input above -- never invent a tag for a fact not present in the input"""
 
             response = self.client.chat.completions.create(
                 model=self.model,
@@ -64,6 +65,8 @@ Return ONLY a JSON object with these keys:
             data["extraction_note"] = None
             confidence = str(data.get("confidence") or "Medium").strip().capitalize()
             data["confidence"] = confidence if confidence in ("High", "Medium", "Low") else "Medium"
+            tags = data.get("tags")
+            data["tags"] = [str(t).strip() for t in tags if str(t).strip()] if isinstance(tags, list) else []
             return data
         except Exception as e:
             print(f"Error in research agent enrich: {e}")
@@ -113,6 +116,7 @@ Dictated note: {raw_text}"""
             "opportunity": None,
             "confidence": "Medium" if description else "Low",
             "extraction_note": note,
+            "tags": [],
         }
 
 

@@ -116,6 +116,7 @@ class RecallAnalyzeResponse(BaseModel):
     potential_action: Optional[str] = None
     confidence: Literal["High", "Medium", "Low"] = "Medium"
     extraction_note: Optional[str] = None
+    tags: List[str] = []
 
 
 class RecallRefineNoteRequest(BaseModel):

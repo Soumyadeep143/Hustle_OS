@@ -47,6 +47,7 @@ interface Draft {
   followUpAt: string;
   followUpNote: string;
   extractionNote: string;
+  tags: string[];
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -63,7 +64,14 @@ const EMPTY_DRAFT: Draft = {
   followUpAt: '',
   followUpNote: '',
   extractionNote: '',
+  tags: [],
 };
+
+// Lowercase, trimmed, hyphenated-spaces-ok, deduped -- keeps AI-suggested
+// and manually-typed tags in one consistent shape.
+function normalizeTag(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^#/, '');
+}
 
 export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string }) => void }) {
   const open = useUi((s) => s.recallCaptureOpen);
@@ -79,6 +87,7 @@ export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string 
   const [saving, setSaving] = useState(false);
   const [capturedAt, setCapturedAt] = useState<Date | null>(null);
   const [dictation, setDictation] = useState<DictationState>('idle');
+  const [tagInput, setTagInput] = useState('');
 
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -103,6 +112,7 @@ export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string 
     setError(null);
     setCapturedAt(null);
     setDictation('idle');
+    setTagInput('');
     if (recorderRef.current) {
       recorderRef.current.ondataavailable = null;
       recorderRef.current.onstop = null;
@@ -181,6 +191,7 @@ export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string 
         followUpAt: '',
         followUpNote: '',
         extractionNote: result.extraction_note || '',
+        tags: (result.tags || []).map(normalizeTag).filter(Boolean),
       });
       setPhase('result');
     } catch {
@@ -192,6 +203,17 @@ export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string 
   const captureManually = () => {
     setDraft({ ...EMPTY_DRAFT, url: url.trim(), description: description.trim(), title: description.trim().slice(0, 60) });
     setPhase('result');
+  };
+
+  const addTag = (raw: string) => {
+    const tag = normalizeTag(raw);
+    if (!tag) return;
+    setDraft((d) => (d.tags.includes(tag) ? d : { ...d, tags: [...d.tags, tag] }));
+    setTagInput('');
+  };
+
+  const removeTag = (tag: string) => {
+    setDraft((d) => ({ ...d, tags: d.tags.filter((t) => t !== tag) }));
   };
 
   const handleSave = async () => {
@@ -209,6 +231,7 @@ export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string 
         location: draft.location.trim() || undefined,
         follow_up_at: draft.followUpAt || undefined,
         follow_up_note: draft.followUpNote.trim() || undefined,
+        tags: draft.tags,
       };
       const created = await api.recall.create(payload);
       showToast('Saved to RECALL');
@@ -375,6 +398,47 @@ export function RecallCaptureSheet({ onSaved }: { onSaved?: (item: { id: string 
           <div>
             <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--color-ink-3)]">Priority</span>
             <SegmentedControl options={PRIORITIES} value={draft.priority} onChange={(v) => setDraft({ ...draft, priority: v })} />
+          </div>
+
+          <div>
+            <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--color-ink-3)]">Tags</span>
+            {draft.tags.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-1.5">
+                {draft.tags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    aria-label={`Remove tag ${tag}`}
+                    className="group flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium"
+                    style={{ background: 'var(--color-blue-soft)', color: 'var(--color-blue)' }}
+                  >
+                    #{tag}
+                    <span className="text-[13px] leading-none opacity-60 group-hover:opacity-100">×</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <input
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ',') {
+                  e.preventDefault();
+                  addTag(tagInput);
+                } else if (e.key === 'Backspace' && !tagInput && draft.tags.length) {
+                  removeTag(draft.tags[draft.tags.length - 1]);
+                }
+              }}
+              onBlur={() => tagInput.trim() && addTag(tagInput)}
+              placeholder="Add a tag and press Enter…"
+              className={INPUT_CLASS}
+            />
+            <p className="mt-1.5 text-[11.5px] text-[var(--color-ink-3)]">
+              {draft.tags.length > 0
+                ? 'AI-suggested tags above — remove any that don’t fit, or add your own.'
+                : 'Type your own, or run Analyze again for AI suggestions.'}
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

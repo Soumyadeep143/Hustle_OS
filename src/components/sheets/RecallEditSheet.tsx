@@ -24,6 +24,10 @@ const PRIORITIES: { value: string; label: string }[] = [
 const INPUT_CLASS =
   'w-full rounded-[var(--radius-control)] border border-[var(--color-line)] bg-[var(--color-raised)] px-3.5 py-2.5 text-[14px] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-ink-3)]';
 
+function normalizeTag(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^#/, '');
+}
+
 export function RecallEditSheet({
   open,
   onClose,
@@ -47,7 +51,17 @@ export function RecallEditSheet({
   const [person, setPerson] = useState('');
   const [location, setLocation] = useState('');
   const [url, setUrl] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [saving, setSaving] = useState(false);
+
+  const addTag = (raw: string) => {
+    const tag = normalizeTag(raw);
+    if (!tag) return;
+    setTags((t) => (t.includes(tag) ? t : [...t, tag]));
+    setTagInput('');
+  };
+  const removeTag = (tag: string) => setTags((t) => t.filter((x) => x !== tag));
 
   useEffect(() => {
     if (!open || !item) return;
@@ -62,6 +76,8 @@ export function RecallEditSheet({
     setPerson(item.person || '');
     setLocation(item.location || '');
     setUrl(item.url || '');
+    setTags(item.tags || []);
+    setTagInput('');
   }, [open, item]);
 
   const handleSave = async () => {
@@ -80,6 +96,7 @@ export function RecallEditSheet({
         person: person.trim() || null,
         location: location.trim() || null,
         url: url.trim() || null,
+        tags,
       });
       onSaved(saved);
       showToast('Updated');
@@ -142,6 +159,42 @@ export function RecallEditSheet({
         <div>
           <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--color-ink-3)]">Priority</span>
           <SegmentedControl options={PRIORITIES} value={priority} onChange={setPriority} />
+        </div>
+
+        <div>
+          <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[.14em] text-[var(--color-ink-3)]">Tags</span>
+          {tags.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {tags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => removeTag(tag)}
+                  aria-label={`Remove tag ${tag}`}
+                  className="group flex items-center gap-1 rounded-full px-2.5 py-1 text-[12px] font-medium"
+                  style={{ background: 'var(--color-blue-soft)', color: 'var(--color-blue)' }}
+                >
+                  #{tag}
+                  <span className="text-[13px] leading-none opacity-60 group-hover:opacity-100">×</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ',') {
+                e.preventDefault();
+                addTag(tagInput);
+              } else if (e.key === 'Backspace' && !tagInput && tags.length) {
+                removeTag(tags[tags.length - 1]);
+              }
+            }}
+            onBlur={() => tagInput.trim() && addTag(tagInput)}
+            placeholder="Add a tag and press Enter…"
+            className={INPUT_CLASS}
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
