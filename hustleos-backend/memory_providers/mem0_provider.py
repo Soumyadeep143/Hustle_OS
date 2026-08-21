@@ -34,7 +34,10 @@ class Mem0MemoryProvider(MemoryProvider):
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
-            timeout=15.0,
+            # search() now runs proactively on every voice/chat turn (see
+            # VoiceAgent._respond), not just explicit searches — keep this
+            # short so a slow/unreachable Mem0 doesn't stall every reply.
+            timeout=5.0,
         )
         # Fail fast here (at provider construction) rather than on the first
         # real call, so the factory's try/except can fall back to

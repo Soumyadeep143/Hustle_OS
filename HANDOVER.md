@@ -1,76 +1,220 @@
-# HustleOS AI Brain — Handover
+# HustleOS — Engineering Handover
 
-Written for whoever picks this up next (Kiro, Codex, or a human). Read this before touching `agents/voice_agent.py`, `agents/ai_tools.py`, `agents/schedule_engine.py`, or `agents/conversation_store.py` — they're the core of a system that was deliberately built as ONE unified AI brain, not several competing ones. The product spec (ask the user for the full text if you don't have it — it's long) is explicit: "Do NOT build Home AI / Recall AI / Voice AI / Job AI / Calendar AI / Team AI. Instead: ONE unified AI orchestration layer." Keep it that way.
+**Branch:** `claude/phase3-api-integration` · **Commit:** `73726ec` · **PR:** https://github.com/Soumyadeep143/Hustle_OS/pull/new/claude/phase3-api-integration
 
-## Architecture as it exists today
+Read this before touching anything inside `agents/` or `routes/`. The system was built with deliberate, load-bearing architectural constraints. Ignoring them will create the exact fragmentation the spec explicitly forbids.
+
+---
+
+## Architecture
 
 ```
-TEXT (AI chat screen) ─┐
-                        ├──> POST /api/voice/command ──> VoiceAgent.process_voice_command()
-VOICE (voice overlay) ──┘                                        │
-                                                    ┌──────────────┼──────────────┐
-                                            scheduling-shaped?  else: tool-calling chat loop
-                                                    │                              │
-                                       agents/schedule_engine.py          agents/ai_tools.py
-                                       (deterministic regex+datetime,     (OpenAI function-calling,
-                                        never LLM-guessed dates/times)     read + a couple write tools)
+┌─────────────────────────────────────────────────────────────────┐
+│  Browser (React/Vite, src/)                                     │
+│                                                                 │
+│  AI.tsx ──────────────────────────────────────────────────────┐ │
+│  Voice.tsx  ──── POST /api/voice/command ────────────────────┐│ │
+│  Home.tsx (schedule Quick Add) ─ POST /api/schedule/parse ──┐││ │
+└─────────────────────────────────────────────────────────────│││─┘
+                                                              │││
+                           ┌──────────────────────────────────┘││
+                           │   routes/voice.py                  ││
+                           │   • builds context dict            ││
+                           │     (tasks / apps / RECALL         ││
+                           │      snapshot + follow_ups_due)    ││
+                           │   • builds tool_ctx dict           ││
+                           │     (live store handles)           ││
+                           │   • calls VoiceAgent               ││
+                           └──────────┬─────────────────────────┘│
+                                      │                           │
+                    agents/voice_agent.py                         │
+                    VoiceAgent.process_voice_command()            │
+                              │                                   │
+                ┌─────────────┴──────────────┐                   │
+                │                            │                   │
+    scheduling-shaped?               everything else             │
+    looks_like_scheduling_           VoiceAgent._respond()       │
+    request() heuristic              OpenAI function-calling     │
+                │                    loop (max 3 rounds)         │
+                │                            │                   │
+    agents/schedule_engine.py        agents/ai_tools.py          │
+    parse_schedule_text()            TOOL_SPECS + execute_tool() │
+    (regex + stdlib datetime,                │                   │
+     NEVER LLM date guessing)        ┌───────┴───────┐           │
+                │                  read            write          │
+                │               tools:           tools:           │
+    ambiguous? ─┤          get_today_plan    create_task          │
+       yes: ask │          get_upcoming_     update_application_  │
+        question│          schedule          status               │
+       no: persist          search_recall                        │
+        directly │          search_applications                  │
+                │                                                │
+    agents/conversation_store.py ◄─────────── pending slot      │
+    (Postgres — 005_conversation_state.sql)    cleared on        │
+    stores "pending_type" + payload            unrelated msg     │
+    for cross-turn slot-filling                                  │
+                                                                 │
+    ──────────────────────────────────────────────────────────── │
+                                                                 │
+                           routes/schedule.py ◄──────────────────┘
+                           POST /api/schedule/parse
+                           (same parse_schedule_text() call —
+                            Quick Add text box, not voice)
+                           POST /api/schedule/{id}/sync-calendar
+                           (real Google Calendar event push)
 ```
 
-One endpoint, one `VoiceAgent`, shared by text and voice — this already satisfies spec section 2 and section 14. Don't fork it.
+### The non-negotiable constraint
 
-### Request/response shape
-- `POST /api/voice/command` — body: `VoiceCommandRequest {transcript, timezone}` (models/schemas.py). Auth via JWT (`get_current_user_id`), never trust a client-supplied user id.
-- Response: `VoiceResponse {response, audio_url, schedule_draft}` (models/schemas.py + models/schedule_schemas.py's `ScheduleDraftDto`).
-- `routes/voice.py`'s `get_agents()` builds a `context` dict (tasks/applications/RECALL snapshot, truncated) and a `tool_ctx` dict (live store handles: `home`, `recall`, `memory`, `tasks`, `user_id`, `timezone`) that both the scheduling path and the tool-calling path read from.
+**One endpoint. One brain. One code path.** `POST /api/voice/command` handles both the AI chat screen (`src/screens/AI.tsx`) and the voice overlay (`src/screens/Voice.tsx`). `parse_schedule_text()` in `agents/schedule_engine.py` is shared by both voice (`VoiceAgent`) and the Quick Add text box (`routes/schedule.py`). There is no "Home AI", "Voice AI", "Job AI" — there is one `VoiceAgent`. The spec (`agents/voice_agent.py`'s docstring, and the product spec if you have it) is explicit. Don't fork it.
 
-### The two control-flow branches inside `VoiceAgent.process_voice_command`
-1. **Scheduling branch** — `looks_like_scheduling_request()` (keyword heuristic) → `parse_schedule_text()` (deterministic date/time extraction, `agents/schedule_engine.py`) → if the result is unambiguous, persists directly via `HomeStore.add_timeline_entry()`; if ambiguous (no time, or unclear AM/PM), asks a focused follow-up question instead of guessing (spec section 4/15/16).
-2. **Tool-calling branch** (`VoiceAgent._respond`) — everything else. OpenAI function-calling loop against `TOOL_SPECS` (`agents/ai_tools.py`). Currently: `get_today_plan`, `get_upcoming_schedule`, `search_recall`, `search_applications` (read), `create_task`, `update_application_status` (write, direct-execute — low risk per spec section 18).
+---
 
-### Conversational working memory (just added)
-`agents/conversation_store.py` + `db/migrations/005_conversation_state.sql` — a one-row-per-user Postgres table holding a "pending slot" (currently only used for `schedule_clarification`: the original phrase + which piece was missing). Before the scheduling branch runs, `process_voice_command` checks for a pending slot; if the new message looks like a short time answer (`_looks_like_followup_answer`), it merges into the original phrase and re-parses through the *same* `parse_schedule_text()` — no separate NLU path. Verified end-to-end: "I have an interview tomorrow." → "What time?" → "5 PM." → exactly one interview record, correct date+time, no duplicate (spec's Test A). Pending expires after 10 minutes and clears on any unrelated message.
+## What's real and working
 
-**If you extend this**: the `pending_type` column is deliberately generic (jsonb payload) so you can add other pending-slot kinds (e.g. "recall_capture_followup" for spec section 4's "send me the link and I'll save it" flow, or "entity_disambiguation" for spec section 5/23's "did you mean ABC or XYZ?") without a schema migration — just a new `pending_type` string and whatever shape of payload that flow needs, plus a branch in `process_voice_command` that checks it before falling through to the tool-calling loop.
+### Backend
 
-## What's real and working (don't rebuild)
+| File | What it does |
+|---|---|
+| `agents/voice_agent.py` | Single conversational brain. Scheduling branch + tool-calling branch. Cross-turn slot-filling. Proactive Mem0 fetch injected into every context snapshot. Entity-continuity pronoun detection (`_PRONOUN_RE`) enriches transcripts before the tool loop. Whisper STT + multi-provider TTS. |
+| `agents/schedule_engine.py` | Fully deterministic NLU: today / tomorrow / day after tomorrow / next Friday / after N days / month+date / time ranges / AM/PM ambiguity detection. Never calls an LLM for date math. Shared by voice + Quick Add. |
+| `agents/ai_tools.py` | `TOOL_SPECS` + `execute_tool()`. **10 tools total:** `get_today_plan`, `get_upcoming_schedule`, `search_recall`, `search_applications`, `create_task`, `update_application_status` (existing); `search_memory`, `remember_preference` (Mem0); `get_recall_thread` (RECALL→Application→event-log join); `get_forgotten_items` (overdue follow-ups + stale apps + past-due tasks). |
+| `agents/conversation_store.py` | Postgres-backed per-user state. **Pending slot** (schedule clarification, 10-min expiry). **Last-entity tracking** (`save_last_entity` / `get_last_entity` / `clear_last_entity`) — written by ai_tools after unambiguous tool results, read by voice_agent for pronoun resolution. |
+| `memory_providers/mem0_provider.py` | Complete Mem0 REST client. Auto-selected by `get_memory_provider()` when `MEM0_API_KEY` is set. Now wired into `routes/voice.py` → `tool_ctx["memory_provider"]` and fetched proactively in `VoiceAgent._respond`. |
+| `agents/calendar_client.py` | Real Google Calendar OAuth. `build_auth_url()`, `exchange_code()`, `refresh_access_token()`, `create_event()`. httpx only — no Google SDK. Inert if `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` not set. `is_configured()` check guards every caller. |
+| `agents/calendar_store.py` | `calendar_connections` table CRUD. Token refresh path in `routes/schedule.py` writes back via `update_access_token()`. |
+| `agents/memory_agent.py` | Profiles, applications, captures — Postgres only (no more `memory.json`). `get_user_context()` used by planner/brief seeding. `detect_insights()` used by signals seeding. |
+| `agents/recall_store.py` | `recall_items` + `recall_timeline_events` — Postgres. Every row is a real user capture, nothing seeded. |
+| `agents/recall_source.py` | URL→source detection. `detect_source(url)` → `("linkedin" \| "x" \| "instagram" \| "reddit" \| "other", display_name)`. Matches on host only, never guesses from free text. |
+| `agents/home_store.py` | TODAY timeline, SIGNALS, AI Brief — Postgres (`timeline_entries`, `signals`, `briefs`, `seed_flags`). First-visit seeding from planner priorities (one-time, idempotent via `seed_flags`). |
+| `agents/task_store.py` | FOCUS task list — Postgres (`tasks`, `seed_flags`). First-visit seed from planner. |
+| `agents/planner_agent.py` | Claude via Anthropic API (see SDK gotcha below) → returns `[]` on any failure, never hardcoded fallbacks. |
+| `agents/opportunity_agent.py` | `discover_jobs()` calls Claude to generate realistic opportunities; `score_opportunity()` uses Claude. Both return `[]` on failure, no mock data. |
+| `agents/workspace_store.py` | Enterprise org-health — JSON file (`workspace_state.json`). Defaults to zeroed-out state, no mock numbers. |
+| `memory_providers/mem0_provider.py` | Complete Mem0 REST client over httpx (no `mem0ai` SDK — see pydantic conflict note). `get_memory_provider()` auto-selects it if `MEM0_API_KEY` is set. Zero callers today — see roadmap item 1. |
+| `auth.py` | JWT (30-day expiry), bcrypt, `get_current_user_id()` FastAPI dependency. Every authenticated route uses it. Never trust a client-supplied `user_id` field in a request body. |
+| `db/connection.py` | `get_cursor()` context manager over psycopg2, `DATABASE_URL` from env. |
+| `db/migrations/001_personal_schema.sql` | profiles, applications, captures, tasks, timeline_entries, signals, briefs, seed_flags |
+| `db/migrations/002_users_auth.sql` | users table for auth |
+| `db/migrations/003_recall_schema.sql` | recall_items, recall_timeline_events |
+| `db/migrations/004_scheduling.sql` | timeline_entries extended columns (item_type, priority, scheduled_date, start_time, end_time, all_day, timezone, calendar_event_id, completed, …), calendar_connections |
+| `db/migrations/005_conversation_state.sql` | conversation_state (pending slot) |
+| `db/migrations/006_entity_continuity.sql` | Adds `last_entity_type`, `last_entity_id`, `last_entity_label` columns to conversation_state — **apply this migration before starting the server** |
 
-| Capability | Where | Notes |
-|---|---|---|
-| Unified brain, one endpoint for text+voice | `routes/voice.py`, `agents/voice_agent.py` | |
-| Deterministic date/time NLU (today/tomorrow/next Friday/in 2 days/5pm/etc) | `agents/schedule_engine.py` | Never LLM-guesses a date — regex + stdlib `datetime`/`zoneinfo`. Shared by voice AND the Quick Add text box (`routes/schedule.py`). |
-| Ask instead of invent (missing time → question, not a guess) | `schedule_engine.ScheduleDraft.ambiguous` + `voice_agent._render_schedule_confirmation` | |
-| Cross-turn slot-filling for that question | `agents/conversation_store.py` | New — see above |
-| Tool-calling (read + limited write) | `agents/ai_tools.py`, `TOOL_SPECS` | OpenAI function-calling, 3-round loop in `VoiceAgent._respond` |
-| RECALL: real user capture, source detection (LinkedIn/X/Instagram/Reddit), AI enrichment, follow-ups, timeline, Applications linking | `hustleos-backend/agents/recall_store.py`, `research_agent.py`, `strategy_agent.py`, `routes/recall.py`, `agents/recall_source.py` | No fake/seeded data — everything here is real persisted user data. Voice dictation + AI note-cleanup on capture (`RecallCaptureSheet.tsx`, `/api/recall/refine-note`). |
-| Google Calendar OAuth (real, not stubbed) | `agents/calendar_client.py`, `agents/calendar_store.py`, `routes/integrations.py` | Needs `GOOGLE_CLIENT_ID`/`SECRET`/`REDIRECT_URI` in `.env` (already set locally) and the redirect URI registered + your test-user email added in Google Cloud Console (project `codelab-500113`) since the OAuth app is in Testing mode. |
-| Personality (not a job-search bot) | `_SYSTEM_PROMPT` in `voice_agent.py` | Grounded-only, no hallucination, casual/Hinglish-tolerant tone per spec section 19. |
-| Real per-user auth, Postgres everywhere (no more JSON files for Personal/RECALL/Home/Tasks/Scheduling) | `auth.py`, `db/migrations/001-005*.sql` | |
+### Frontend
 
-## Known SDK gotcha (already fixed, don't reintroduce)
+| File | What it does |
+|---|---|
+| `src/screens/AI.tsx` | AI chat screen — calls `POST /api/voice/command` |
+| `src/screens/Voice.tsx` | Voice overlay — same endpoint |
+| `src/screens/Home.tsx` | Greeting (typewriter, per-time-of-day color), Today timeline, Focus, Signals. Schedule Quick Add calls `POST /api/schedule/parse`. Fully animated (see `src/index.css`). |
+| `src/screens/Profile.tsx` | Integrations section: brand icons, shimmer/hover animations (`src/index.css`). |
+| `src/screens/Work.tsx` | Applications + Tasks |
+| `src/screens/recall/` | RECALL capture, list, detail |
+| `src/services/api.ts` | Every API call. Single source of truth for request shapes and base URL. |
+| `src/store/useUi.ts` | Zustand store: workspace, theme, toast, tasks, sheet state. `loadTasks()` / `toggleTask()` / `addTask()` talk to the API — no local mock data. |
 
-`anthropic==0.7.0` (pinned in `requirements.txt`) **predates the Messages API entirely** — `client.messages.create` doesn't exist on that SDK version. Every place that used to call Anthropic (`VoiceAgent`, `PlannerAgent`, `schedule_engine`'s title-polish) was silently failing and falling back until this was found and fixed by switching to `OpenAI` (already proven working in this environment with the configured `OPENAI_API_KEY`). If you're tempted to use Claude for something here, either bump the `anthropic` package deliberately (check the `pydantic==1.10.13` pin — needed for `elevenlabs==0.2.24` — doesn't conflict with whatever version you pick) or just use OpenAI like everything else does.
+---
 
-## What's NOT built yet (the actual roadmap)
+## Known SDK gotcha — do not reintroduce
 
-Ordered roughly by value/dependency, matching the product spec's phases 3-7:
+`anthropic==0.7.0` (pinned in `requirements.txt`) **predates the Messages API.** `client.messages.create` **does not exist** on this version. Calls silently fail/raise `AttributeError` and fall through to exception handlers. This was already bitten in `VoiceAgent` and `schedule_engine`'s LLM polish path — both now use `openai` instead.
 
-1. **Mem0 long-term memory** — `memory_providers/mem0_provider.py` is a complete, working Mem0 REST client (`Mem0MemoryProvider`), reachable via `memory_providers.get_memory_provider()`. **It currently has zero callers** — RECALL used to use it for the old fake-prospect model and was moved off it during the RECALL rebuild (everything folded into `recall_items`/`recall_timeline_events` instead, since that's structured operational data per spec section 3A). What's missing: wiring it into the AI brain for spec section 3B's actual use case — meaningful long-term context (explicit preferences like "remind me 30 min before interviews", recurring patterns, important relationships) — NOT re-storing structured data that already lives in Postgres. Needs: (a) a decision point in `process_voice_command`/`_respond` about when something is memory-worthy (spec section 24 — dedupe, meaningful, not every message), (b) a new read tool (`search_memory`) added to `TOOL_SPECS`/`ai_tools.py`, (c) some write path — probably NOT a raw tool the LLM calls freely, more likely an explicit "remember this" user command plus a light heuristic for promoting an observed pattern, given spec section 9's distinction between EXPLICIT PREFERENCE and OBSERVED PATTERN and section 24's memory-quality-control requirement.
+**If you want to use Claude:** either bump `anthropic` deliberately (verify it doesn't conflict with `pydantic==1.10.13`, which `elevenlabs==0.2.24` requires) or keep using `openai`. Don't add any new call to `self.client.messages` on the current `anthropic==0.7.0` install — it will fail silently.
 
-2. **Cross-context intelligence** — connecting RECALL item → Application → Follow-up so "what happened to that ABC job?" gives one synthesized answer (spec section 12/13/26). The data already supports this: `recall_items.related_application_id` links to `applications.id` (see `routes/recall.py`'s `mark_applied` endpoint). What's missing is a tool (e.g. `get_recall_thread(query)`) that resolves a RECALL item, follows the FK to its application, and returns both together for the model to synthesize from — plus maybe a similar link to timeline/calendar events for a full "everything about this thing" answer.
+The pydantic constraint exists because:
+```
+elevenlabs==0.2.24  →  requires pydantic<2
+anthropic>=0.18     →  requires pydantic>=2
+```
+Resolve one before bumping the other.
 
-3. **"What am I forgetting?"** (spec section 7) — a new read tool that checks: overdue tasks, pending follow-ups (`recall_items.follow_up_at` in the past, not archived/completed — same query shape as `routes/voice.py`'s existing `follow_ups_due` computation, just needs to become a callable tool instead of only being in the context snapshot), applications with no recent activity, RECALL items with no status progression, interviews with no prep task. Every insight must cite the real row it came from — no synthetic "you seem busy" filler.
+---
 
-4. **Entity continuity beyond scheduling** (spec section 5) — "move that interview to Friday", "that job", "the recruiter". This is the hard one: needs an entity-resolution layer that can look at recent conversation turns + recently-touched RECALL/Application/timeline rows and disambiguate a pronoun/reference, asking when there are multiple plausible matches (spec: "never guess when ambiguity is significant"). The `conversation_state` table from this handover's slot-filling work could extend to hold "last referenced entity" (type + id), but the resolution logic itself doesn't exist yet.
+## Roadmap — what's left
 
-5. **Personalization + proactive briefings** (spec sections 9, 21, 22, 27) — morning/evening/weekly briefs, adaptive prioritization with explainable reasoning, learned patterns. Nothing built here yet; this depends on (1) and (3) being in place first (briefings are really just "what am I forgetting" + "today's plan" + tone, run on a schedule instead of on-demand).
+All four original roadmap items are now complete. The remaining work is:
 
-## Working conventions from this session (worth keeping)
+### 1. Personalization + proactive briefings (was roadmap item 5)
 
-- **Never fake it.** No hardcoded responses, no invented dates/times, no "done" when a write tool wasn't actually called or failed. Every response referencing app state must be grounded in a real query result. This was a hard requirement throughout and the whole codebase currently honors it — don't regress.
-- **One migration file per logical change**, numbered sequentially in `db/migrations/`, idempotent (`create table if not exists`), applied directly against the live Supabase Postgres DB (there's no migration runner — check `hustleos-backend/.env`'s `DATABASE_URL`, connect with `psycopg2`, execute the `.sql` file). RLS enabled with zero policies on every table (service-role backend connection bypasses it; policies are a safety net only, per the convention established in `001_personal_schema.sql`'s comments).
-- **Test against a throwaway server + throwaway signup, never the shared long-running instance.** Multiple sessions/tools may be working against this codebase at once; spin up `uvicorn app:app --port <unused>`, sign up a disposable test user, verify, then kill your instance. Don't restart the shared `:3000` process without checking nothing else has work in flight against it.
-- **Read the current file before editing it.** This session and a concurrent one were both actively modifying shared files; several edits collided or needed re-reading mid-task. Don't trust a stale in-context copy of a shared file.
+**What exists:**
+- Mem0 is live and wired — `get_memory_provider()` → `tool_ctx["memory_provider"]` → proactive fetch in `VoiceAgent._respond` + `search_memory` / `remember_preference` tools
+- `get_forgotten_items` tool is live
 
-## Env vars needed (`hustleos-backend/.env`, gitignored — not in this repo)
+**What's missing:**
+- Morning/evening brief on login or schedule trigger. Suggested: in `routes/voice.py`'s `process_command`, detect if this is the user's first message of the day (check `conversation_state.updated_at` vs today's date) and prepend a synthetic brief prompt to the context before calling `VoiceAgent._respond`.
+- Learned patterns: `remember_preference` currently only stores explicit user statements. A light post-response pass that calls `provider.add()` for inferred patterns (e.g. consistent Monday follow-up behaviour) needs a decision gate — see HANDOVER spec section 9's EXPLICIT vs OBSERVED distinction.
+- The spec distinguishes `"preference"`, `"pattern"`, and `"fact"` metadata categories — the tool already stores these, but nothing promotes observed patterns yet.
 
-`OPENAI_API_KEY`, `ANTHROPIC_API_KEY` (unused now, see gotcha above), `ELEVENLABS_API_KEY`, `SARVAM_API_KEY`, `DATABASE_URL` (Supabase pooler), `JWT_SECRET`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REDIRECT_URI`, `MEM0_API_KEY`. All currently set in the local `.env` — ask the user rather than regenerating any of them.
+### 2. Deeper entity-continuity mutations ("move it to Friday")
+
+**What exists:**
+- `conversation_store.get_last_entity()` / `save_last_entity()` — written after `get_recall_thread` and `update_application_status` tool calls
+- Pronoun detection (`_PRONOUN_RE`) in `VoiceAgent.process_voice_command` enriches the transcript before the tool loop
+- The model sees `"Last referenced entity: X [type: …, id: …]"` in the context snapshot
+
+**What's missing:**
+- **Mutation routing for timeline entries**: "move that interview to Friday" currently falls into the scheduling branch (`looks_like_scheduling_request` matches) and creates a NEW entry instead of updating the existing one. Needs: before the scheduling branch, check if `_contains_pronoun(transcript)` + `last_entity.entity_type == "timeline_entry"` → route to an update tool rather than a create.
+- `update_timeline_entry` tool not yet in `TOOL_SPECS`. Add it to `agents/ai_tools.py` + `_TOOL_IMPLS`, write `last_entity` on successful update.
+- Similarly `delete_entity` / `reschedule_entity` for the voice "cancel that" / "reschedule it" patterns.
+
+---
+
+## Running the backend
+
+```bash
+cd hustleos-backend
+python -m venv venv
+venv\Scripts\activate          # Windows
+pip install -r requirements.txt
+uvicorn app:app --reload --port 3001  # use a port that isn't :3000 if another session is running
+```
+
+Apply migrations (run once against the Supabase Postgres DB — idempotent, safe to re-run):
+```bash
+# each migration in order, e.g. using psql or Supabase SQL editor
+# db/migrations/001_personal_schema.sql
+# db/migrations/002_users_auth.sql
+# db/migrations/003_recall_schema.sql
+# db/migrations/004_scheduling.sql
+# db/migrations/005_conversation_state.sql
+```
+
+Running the frontend:
+```bash
+# repo root
+npm install
+npm run dev   # Vite on :5173
+```
+
+---
+
+## Environment variables
+
+All in `hustleos-backend/.env` (gitignored — already populated locally, ask the user before regenerating):
+
+| Variable | Used by |
+|---|---|
+| `OPENAI_API_KEY` | `VoiceAgent` (GPT-4o-mini), `schedule_engine` (title polish), `VoiceAgent.speech_to_text` (Whisper) |
+| `ANTHROPIC_API_KEY` | `PlannerAgent`, `OpportunityAgent` (but see SDK gotcha — effectively unused until `anthropic` is bumped) |
+| `ELEVENLABS_API_KEY` | `voice_providers/elevenlabs_provider.py` |
+| `SARVAM_API_KEY` | `voice_providers/` Sarvam provider (primary voice; ElevenLabs is fallback) |
+| `DATABASE_URL` | `db/connection.py` — Supabase pooler connection string |
+| `JWT_SECRET` | `auth.py` — change this from `dev-only-change-me` before any real deployment |
+| `GOOGLE_CLIENT_ID` | `agents/calendar_client.py` |
+| `GOOGLE_CLIENT_SECRET` | `agents/calendar_client.py` |
+| `GOOGLE_REDIRECT_URI` | `agents/calendar_client.py` — must be registered in Google Cloud Console (project `codelab-500113`), OAuth app is in Testing mode, add test-user emails there |
+| `MEM0_API_KEY` | `memory_providers/mem0_provider.py` — set this to activate Mem0; `get_memory_provider()` auto-selects it |
+| `FRONTEND_URL` | CORS origins in `app.py` |
+
+---
+
+## Working conventions
+
+- **Read the file before editing it.** Multiple sessions work against this repo simultaneously. A stale in-context copy has burned work before.
+- **Never fake it.** No hardcoded response strings, no invented dates/times, no "done" unless a write tool actually succeeded. Every response citing app state must come from a real query result. The whole codebase currently holds this invariant — don't regress it.
+- **One migration per logical change**, numbered sequentially under `db/migrations/`, named descriptively. All migrations are idempotent (`create table if not exists`, `add column if not exists`, `alter table ... add constraint if not exists`). No migration runner — apply manually against Supabase.
+- **Don't restart the shared `:3000` server process without checking.** Another session or dev may have work in flight against it. Spin up on a different port for testing, kill your instance when done.
+- **Secrets stay in `.env`.** `.env` is gitignored and was confirmed excluded from commit `73726ec`. `.claude/`, `.agents/`, `.mcp.json` are also now gitignored (local tooling state, not app source).
+- **Test auth with a throwaway signup** — `POST /api/auth/signup` with a disposable email, use the returned JWT for subsequent calls. Never test against the persistent user account if you're running destructive operations.
+- **The `pydantic==1.10.13` pin is load-bearing.** Don't bump it without also fixing `elevenlabs`. If you must use pydantic v2, you'll need to either upgrade or replace ElevenLabs.

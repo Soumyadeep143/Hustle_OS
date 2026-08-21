@@ -1,10 +1,17 @@
-"""Read-only tool layer for VoiceAgent's tool-calling loop.
+"""Tool layer for VoiceAgent's tool-calling loop.
 
-Each tool wraps an existing store method 1:1 — no new persistence, no new
-business logic. The LLM picks a tool via OpenAI function-calling; this module
+Each tool wraps existing store/provider methods — no new persistence logic
+lives here. The LLM picks a tool via OpenAI function-calling; this module
 executes it against the real per-user stores and returns a compact,
-JSON-serializable result for the model to read back. Phase 1 of the unified
-AI layer: read-only only, no mutation happens through chat yet.
+JSON-serializable result for the model to read back.
+
+Tools added in this revision:
+  search_memory        — Mem0 semantic search over long-term preferences/facts
+  remember_preference  — Persist an explicit user preference to Mem0
+  get_recall_thread    — Join a RECALL item + its linked application + event log
+                         in one call (cross-context intelligence)
+  get_forgotten_items  — Overdue follow-ups, stale applications, past-due tasks
+                         grouped by type (proactive "what am I forgetting?")
 """
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
@@ -13,6 +20,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from .recall_source import source_display_for
 
 TOOL_SPECS = [
+    # ── existing tools ────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -68,7 +76,7 @@ TOOL_SPECS = [
                     },
                     "status": {
                         "type": "string",
-                        "description": "Filter by status, e.g. 'new', 'applied', 'archived'.",
+                        "description": "Filter by status, e.g. 'saved', 'applied', 'archived'.",
                     },
                     "since_days": {
                         "type": "integer",
@@ -96,7 +104,7 @@ TOOL_SPECS = [
                     },
                     "status": {
                         "type": "string",
-                        "description": "Filter by exact status, e.g. 'applied', 'interviewing', 'offer', 'rejected'.",
+                        "description": "Filter by exact status: 'applied', 'reviewing', 'interview', 'captured'.",
                     },
                 },
             },
@@ -139,10 +147,10 @@ TOOL_SPECS = [
                 "matched by company name. Use for 'mark X as applied', 'I applied "
                 "to X', 'I got an interview with X'. The applications table only "
                 "supports these four statuses today — map anything else to the "
-                "closest one and say so in your reply rather than inventing a "
-                "new status (e.g. an offer or rejection currently has nowhere "
-                "to go but 'interview' or 'applied' — tell the user that's a "
-                "known gap instead of pretending it recorded the nuance)."
+                "closest one (e.g. an offer or rejection currently has nowhere to "
+                "go but 'interview' or 'applied') and say so in your reply — tell "
+                "the user that's a known gap instead of pretending it recorded "
+                "the nuance."
             ),
             "parameters": {
                 "type": "object",
@@ -151,15 +159,118 @@ TOOL_SPECS = [
                     "status": {
                         "type": "string",
                         "enum": ["applied", "reviewing", "interview", "captured"],
-                        "description": "Must be exactly one of these four values — no others are valid.",
+                        "description": "Must be exactly one of these four values.",
                     },
                 },
                 "required": ["company", "status"],
             },
         },
     },
+
+    # ── Roadmap 1: Mem0 long-term memory ─────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "search_memory",
+            "description": (
+                "Search the user's long-term memory for preferences, recurring "
+                "patterns, and important facts they've told the assistant. Use "
+                "for 'do you remember...', 'what do you know about my...', or "
+                "whenever a reply needs a personal preference (e.g. reminder "
+                "timing, communication style, interview prep habits)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Natural-language query describing what to look for.",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return. Default 5.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_preference",
+            "description": (
+                "Save an explicit preference or important personal fact to "
+                "long-term memory. Only call this when the user clearly states "
+                "something they want remembered — 'remember that...', 'always "
+                "remind me...', 'I prefer...'. Do NOT call this for every "
+                "message. Never deduce a preference — only store what was "
+                "explicitly said."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {
+                        "type": "string",
+                        "description": "The preference or fact, verbatim or very lightly cleaned up.",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": (
+                            "One of: 'preference' (explicit user preference), "
+                            "'pattern' (observed recurring behaviour), "
+                            "'fact' (biographical / work fact). Default 'preference'."
+                        ),
+                    },
+                },
+                "required": ["text"],
+            },
+        },
+    },
+
+    # ── Roadmap 2: Cross-context recall thread ────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "get_recall_thread",
+            "description": (
+                "Get the full story of a RECALL capture: the saved item itself, "
+                "the linked application (if it was turned into one), and its "
+                "complete activity timeline. Use for 'what happened with that "
+                "X job/company I saved', 'show me everything about X', 'how "
+                "far did I get with X'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Company name, job title, or keyword to match against the RECALL item.",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
+    },
+
+    # ── Roadmap 3: Proactive forgotten-items surface ───────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "get_forgotten_items",
+            "description": (
+                "Find things the user is likely forgetting: overdue RECALL "
+                "follow-ups, applications with no activity in 7+ days, open "
+                "tasks past their due date. Use for 'what am I forgetting', "
+                "'what should I be doing', 'anything overdue', 'catch me up'."
+            ),
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
 ]
 
+
+# ── helpers ────────────────────────────────────────────────────────────────
 
 def _local_today(timezone: str) -> date:
     try:
@@ -184,6 +295,7 @@ def _timeline_summary(entry: Dict) -> Dict:
 
 def _recall_summary(item: Dict) -> Dict:
     return {
+        "id": item.get("id"),
         "title": item.get("title"),
         "source": source_display_for(item.get("source")),
         "category": item.get("category"),
@@ -192,19 +304,24 @@ def _recall_summary(item: Dict) -> Dict:
         "created_at": item.get("created_at"),
         "follow_up_at": item.get("follow_up_at"),
         "notes": item.get("notes"),
+        "company": item.get("company"),
     }
 
 
 def _application_summary(app: Dict) -> Dict:
     return {
+        "id": app.get("id"),
         "company": app.get("company"),
         "role": app.get("role"),
         "status": app.get("status"),
         "applied_at": app.get("applied_at"),
         "last_followup": app.get("last_followup"),
         "notes": app.get("notes"),
+        "updated_at": app.get("updated_at"),
     }
 
+
+# ── existing tool implementations ─────────────────────────────────────────
 
 def get_today_plan(ctx: Dict, args: Dict) -> Dict:
     today_iso = _local_today(ctx["timezone"]).isoformat()
@@ -237,6 +354,7 @@ def search_recall(ctx: Dict, args: Dict) -> Dict:
             if query in (i.get("title") or "").lower()
             or query in (i.get("description") or "").lower()
             or query in (i.get("notes") or "").lower()
+            or query in (i.get("company") or "").lower()
         ]
     since_days = args.get("since_days")
     if since_days:
@@ -270,7 +388,13 @@ def create_task(ctx: Dict, args: Dict) -> Dict:
         due_at=args.get("due_at"),
         priority=args.get("priority") or "normal",
     )
-    return {"created": True, "title": created.get("title"), "due_at": created.get("due_at"), "priority": created.get("priority")}
+    return {
+        "created": True,
+        "id": created.get("id"),
+        "title": created.get("title"),
+        "due_at": created.get("due_at"),
+        "priority": created.get("priority"),
+    }
 
 
 def update_application_status(ctx: Dict, args: Dict) -> Dict:
@@ -286,11 +410,20 @@ def update_application_status(ctx: Dict, args: Dict) -> Dict:
     if len(matches) > 1:
         return {
             "error": "ambiguous",
-            "message": "More than one application matches — ask the user which one before updating anything.",
+            "message": "More than one application matches — ask the user which one before updating.",
             "candidates": [_application_summary(a) for a in matches],
         }
 
     updated = ctx["memory"].update_application(matches[0]["id"], {"status": status})
+    if not updated:
+        return {"error": "update_failed", "message": f"Could not update '{args.get('company')}' — it may no longer exist."}
+
+    # Record the updated application as the last referenced entity so
+    # pronouns in the next turn ("it", "that one") resolve back to it.
+    if ctx.get("conv_store") and ctx.get("user_id"):
+        ctx["conv_store"].save_last_entity(
+            ctx["user_id"], "application", updated["id"], updated["company"]
+        )
     return {
         "updated": True,
         "company": updated.get("company"),
@@ -299,6 +432,182 @@ def update_application_status(ctx: Dict, args: Dict) -> Dict:
     }
 
 
+# ── Roadmap 1: Mem0 tools ─────────────────────────────────────────────────
+
+def search_memory(ctx: Dict, args: Dict) -> Dict:
+    """Semantic search over long-term Mem0 memories."""
+    provider = ctx.get("memory_provider")
+    if not provider:
+        return {"error": "memory_unavailable", "message": "Long-term memory is not configured."}
+    query = (args.get("query") or "").strip()
+    if not query:
+        return {"error": "missing_query", "message": "Need a query to search memory."}
+    limit = int(args.get("limit") or 5)
+    try:
+        results = provider.search(ctx["user_id"], query, limit=limit)
+        return {
+            "count": len(results),
+            "memories": [
+                {"text": r.get("text"), "category": (r.get("metadata") or {}).get("category", ""), "created_at": r.get("created_at")}
+                for r in results
+            ],
+        }
+    except Exception as e:
+        return {"error": str(e), "message": "Memory search failed."}
+
+
+def remember_preference(ctx: Dict, args: Dict) -> Dict:
+    """Store an explicit user preference/fact in Mem0."""
+    provider = ctx.get("memory_provider")
+    if not provider:
+        return {"error": "memory_unavailable", "message": "Long-term memory is not configured."}
+    text = (args.get("text") or "").strip()
+    if not text:
+        return {"error": "missing_text", "message": "Nothing to remember."}
+    category = args.get("category") or "preference"
+    if category not in ("preference", "pattern", "fact"):
+        category = "preference"
+    try:
+        result = provider.add(ctx["user_id"], text, metadata={"category": category, "source": "explicit"})
+        return {"remembered": True, "id": result.get("id"), "text": text, "category": category}
+    except Exception as e:
+        return {"error": str(e), "message": "Could not save to memory."}
+
+
+# ── Roadmap 2: Cross-context recall thread ────────────────────────────────
+
+def get_recall_thread(ctx: Dict, args: Dict) -> Dict:
+    """Return a RECALL item + its linked application + full event log."""
+    query = (args.get("query") or "").strip().lower()
+    if not query:
+        return {"error": "missing_query", "message": "Need a search term."}
+
+    # 1. Find matching RECALL items (title / description / company / notes).
+    items = ctx["recall"].list_items()
+    matches = [
+        i for i in items
+        if query in (i.get("title") or "").lower()
+        or query in (i.get("description") or "").lower()
+        or query in (i.get("company") or "").lower()
+        or query in (i.get("notes") or "").lower()
+    ]
+
+    if not matches:
+        return {"found": False, "message": f"No RECALL item matched '{args.get('query')}'."}
+
+    # Pick the most recent match if several.
+    matches.sort(key=lambda i: i.get("created_at") or "", reverse=True)
+    item = matches[0]
+    item_id = item["id"]
+
+    # 2. Fetch the RECALL event timeline for this item.
+    timeline_events = ctx["recall"].list_timeline(item_id)
+
+    # 3. Follow related_application_id FK if present.
+    application: Optional[Dict] = None
+    related_app_id = item.get("related_application_id")
+    if related_app_id:
+        apps = ctx["memory"].get_applications()
+        application = next((a for a in apps if a.get("id") == related_app_id), None)
+
+    # Record this item as the last referenced entity.
+    if ctx.get("conv_store") and ctx.get("user_id"):
+        ctx["conv_store"].save_last_entity(
+            ctx["user_id"], "recall_item", item_id, item.get("title", "")
+        )
+
+    return {
+        "found": True,
+        "multiple_matches": len(matches) > 1,
+        "recall_item": _recall_summary(item),
+        "application": _application_summary(application) if application else None,
+        "timeline": [
+            {
+                "event_type": e.get("event_type"),
+                "label": e.get("label"),
+                "detail": e.get("detail"),
+                "created_at": e.get("created_at"),
+            }
+            for e in timeline_events
+        ],
+    }
+
+
+# ── Roadmap 3: Forgotten items ────────────────────────────────────────────
+
+def get_forgotten_items(ctx: Dict, args: Dict) -> Dict:
+    """Overdue RECALL follow-ups + stale applications + past-due tasks."""
+    today = _local_today(ctx["timezone"])
+    today_iso = today.isoformat()
+    stale_threshold = (today - timedelta(days=7)).isoformat()
+
+    # 1. Overdue RECALL follow-ups — follow_up_at in the past, not done/archived.
+    recall_items = ctx["recall"].list_items()
+    overdue_followups = [
+        {
+            "id": i.get("id"),
+            "title": i.get("title"),
+            "company": i.get("company"),
+            "follow_up_at": i.get("follow_up_at"),
+            "status": i.get("status"),
+            "days_overdue": (today - date.fromisoformat(i["follow_up_at"])).days,
+        }
+        for i in recall_items
+        if i.get("follow_up_at")
+        and i["follow_up_at"] < today_iso
+        and i.get("status") not in ("completed", "archived")
+    ]
+    overdue_followups.sort(key=lambda x: x["follow_up_at"])
+
+    # 2. Stale applications — no update in 7+ days and still active.
+    apps = ctx["memory"].get_applications()
+    stale_apps = [
+        {
+            "id": a.get("id"),
+            "company": a.get("company"),
+            "role": a.get("role"),
+            "status": a.get("status"),
+            "last_activity": a.get("updated_at") or a.get("applied_at"),
+        }
+        for a in apps
+        if a.get("status") in ("applied", "reviewing")
+        and (a.get("updated_at") or a.get("applied_at") or "") <= stale_threshold
+    ]
+    stale_apps.sort(key=lambda x: x["last_activity"] or "")
+
+    # 3. Past-due open tasks.
+    tasks = ctx["tasks"].list_tasks(ctx["user_id"])
+    overdue_tasks = []
+    for t in tasks:
+        if t.get("done"):
+            continue
+        due = t.get("due_at")
+        if not due:
+            continue
+        # due_at is free-text ("Friday", "This week") or an ISO date.
+        try:
+            due_date = date.fromisoformat(due)
+            if due_date < today:
+                overdue_tasks.append({
+                    "id": t.get("id"),
+                    "title": t.get("title"),
+                    "due_at": due,
+                    "days_overdue": (today - due_date).days,
+                })
+        except ValueError:
+            pass  # free-text due dates are not comparable — skip them
+
+    total = len(overdue_followups) + len(stale_apps) + len(overdue_tasks)
+    return {
+        "total_forgotten": total,
+        "overdue_followups": overdue_followups[:10],
+        "stale_applications": stale_apps[:10],
+        "overdue_tasks": overdue_tasks[:10],
+    }
+
+
+# ── dispatch table ─────────────────────────────────────────────────────────
+
 _TOOL_IMPLS = {
     "get_today_plan": get_today_plan,
     "get_upcoming_schedule": get_upcoming_schedule,
@@ -306,6 +615,10 @@ _TOOL_IMPLS = {
     "search_applications": search_applications,
     "create_task": create_task,
     "update_application_status": update_application_status,
+    "search_memory": search_memory,
+    "remember_preference": remember_preference,
+    "get_recall_thread": get_recall_thread,
+    "get_forgotten_items": get_forgotten_items,
 }
 
 
