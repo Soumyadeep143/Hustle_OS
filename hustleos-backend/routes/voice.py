@@ -109,6 +109,7 @@ async def process_command(request: VoiceCommandRequest, agents: Dict = Depends(g
             context,
             timezone=request.timezone,
             tool_ctx=tool_ctx,
+            include_audio=request.include_audio,
         )
         schedule_draft = result.get("schedule_draft")
         return VoiceResponse(

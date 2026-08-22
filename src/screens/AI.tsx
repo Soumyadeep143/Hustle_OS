@@ -29,7 +29,10 @@ export function AI() {
     setInput('');
     setTyping(true);
     try {
-      const res = await api.voice.command(prompt);
+      // Text chat never plays audio back — skip TTS synthesis entirely so
+      // the response comes back faster and without a multi-hundred-KB
+      // base64 audio payload neither used nor wanted here.
+      const res = await api.voice.command(prompt, undefined, false);
       setMessages((m) => [...m, { role: 'ai', text: res.response }]);
       // May have just created a task via the create_task tool -- refresh so
       // the FOCUS list on Home reflects it without a full app reload.

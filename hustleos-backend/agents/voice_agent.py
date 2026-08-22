@@ -189,6 +189,7 @@ class VoiceAgent:
         context: Dict,
         timezone: str = "UTC",
         tool_ctx: Optional[Dict] = None,
+        include_audio: bool = True,
     ) -> Dict:
         """One entry point for both voice and text.  Three layers:
 
@@ -262,7 +263,7 @@ class VoiceAgent:
                     pass  # history is a quality improvement, never a hard dependency
             return {
                 "response":      response_text,
-                "audio_url":     self.text_to_speech(response_text) or None,
+                "audio_url":     self.text_to_speech(response_text) if include_audio else None,
                 "schedule_draft": draft,
             }
 
@@ -281,7 +282,7 @@ class VoiceAgent:
         response_text = self._respond(transcript, user_name, context, tool_ctx)
         return {
             "response":       response_text,
-            "audio_url":      self.text_to_speech(response_text) or None,
+            "audio_url":      self.text_to_speech(response_text) if include_audio else None,
             "schedule_draft": None,
         }
 

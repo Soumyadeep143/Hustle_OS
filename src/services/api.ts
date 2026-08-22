@@ -753,11 +753,23 @@ export const api = {
       formData.append('file', audio, filename);
       const { data } = await apiClient.post<TranscribeResponse>('/voice/transcribe', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 60000,
       });
       return data;
     },
-    command: async (transcript: string, timezone: string = browserTimezone()): Promise<VoiceResponse> => {
-      const { data } = await apiClient.post<VoiceResponse>('/voice/command', { transcript, timezone });
+    command: async (
+      transcript: string,
+      timezone: string = browserTimezone(),
+      includeAudio: boolean = true
+    ): Promise<VoiceResponse> => {
+      const { data } = await apiClient.post<VoiceResponse>(
+        '/voice/command',
+        { transcript, timezone, include_audio: includeAudio },
+        // Voice mode still does STT + tool-calling + TTS + a large base64
+        // audio payload over the wire — give it more headroom than the
+        // shared default, especially on a slow/cold-started backend.
+        includeAudio ? { timeout: 60000 } : undefined
+      );
       return data;
     },
     tts: async (text: string): Promise<{ audio_url: string | null }> => {

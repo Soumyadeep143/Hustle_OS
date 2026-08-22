@@ -13,6 +13,7 @@ class VoiceCommandRequest(BaseModel):
     transcript: str
     user_id: str = "user_default"
     timezone: str = "UTC"
+    include_audio: bool = True
 
 
 class VoiceResponse(BaseModel):
