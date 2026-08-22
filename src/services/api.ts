@@ -7,7 +7,11 @@ const MAX_RETRIES = 2;
 
 export const apiClient: AxiosInstance = axios.create({
   baseURL: `${API_URL}/api`,
-  timeout: 15000,
+  // AI endpoints (voice/command, assessment, linkedin, outreach) chain several
+  // sequential LLM calls plus TTS; on a free-tier backend (0.1 CPU, cold
+  // starts) that routinely exceeds 15s and the request gets aborted
+  // client-side well before the server would have replied.
+  timeout: 45000,
   headers: {
     'Content-Type': 'application/json',
   },

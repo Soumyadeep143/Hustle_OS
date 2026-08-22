@@ -323,9 +323,23 @@ def _application_summary(app: Dict) -> Dict:
 
 # ── existing tool implementations ─────────────────────────────────────────
 
+def _save_last_timeline_entity(ctx: Dict, entries: List[Dict]) -> None:
+    """Record the fetched timeline entry as the last referenced entity, but
+    only when the tool returned exactly one — with several items in view,
+    a later "that event"/"it" would be genuinely ambiguous, so we leave
+    last_entity untouched rather than guessing which one the model meant."""
+    if len(entries) != 1 or not ctx.get("conv_store") or not ctx.get("user_id"):
+        return
+    entry = entries[0]
+    ctx["conv_store"].save_last_entity(
+        ctx["user_id"], "timeline_entry", entry["id"], entry.get("title", "")
+    )
+
+
 def get_today_plan(ctx: Dict, args: Dict) -> Dict:
     today_iso = _local_today(ctx["timezone"]).isoformat()
     entries = ctx["home"].list_timeline(ctx["user_id"], on_date=today_iso)
+    _save_last_timeline_entity(ctx, entries)
     return {"date": today_iso, "items": [_timeline_summary(e) for e in entries[:20]]}
 
 
@@ -339,6 +353,7 @@ def get_upcoming_schedule(ctx: Dict, args: Dict) -> Dict:
         if e.get("scheduled_date") and today.isoformat() <= e["scheduled_date"] <= end.isoformat()
     ]
     windowed.sort(key=lambda e: (e["scheduled_date"], e.get("start_time") or ""))
+    _save_last_timeline_entity(ctx, windowed)
     return {
         "range": f"{today.isoformat()} to {end.isoformat()}",
         "items": [_timeline_summary(e) for e in windowed[:30]],
