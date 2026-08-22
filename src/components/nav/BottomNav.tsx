@@ -12,7 +12,7 @@ const TABS = [
 export function BottomNav() {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-line)] backdrop-blur-[18px]"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-[var(--color-line)] backdrop-blur-[18px] md:hidden"
       style={{ background: 'var(--color-nav-bg)' }}
     >
       {/* The bar itself spans the full width (so its background/blur reaches

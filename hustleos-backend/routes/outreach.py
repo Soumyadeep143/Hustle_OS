@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from agents import OutreachAgent, MemoryAgent
+from auth import get_current_user_id
 from typing import Dict, List, Optional
 
 router = APIRouter()
@@ -19,7 +20,6 @@ class HiringManagerRequest(BaseModel):
 class OutreachSequenceRequest(BaseModel):
     company: str
     role: str
-    user_id: str = "user_default"
 
 
 class DreamCompanyResponse(BaseModel):
@@ -45,10 +45,10 @@ class OutreachEmail(BaseModel):
     body: str
 
 
-def get_agents() -> Dict:
+def get_agents(user_id: str = Depends(get_current_user_id)) -> Dict:
     return {
         "outreach": OutreachAgent(),
-        "memory": MemoryAgent(),
+        "memory": MemoryAgent(user_id=user_id),
     }
 
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from agents import LinkedInAgent, MemoryAgent
+from auth import get_current_user_id
 from typing import Dict, List
 
 router = APIRouter()
@@ -11,18 +12,16 @@ class LinkedInDMRequest(BaseModel):
     recruiter_title: str
     recruiter_focus: str
     role: str
-    user_id: str = "user_default"
 
 
 class LinkedInPostRequest(BaseModel):
     topic: str
-    user_id: str = "user_default"
 
 
-def get_agents() -> Dict:
+def get_agents(user_id: str = Depends(get_current_user_id)) -> Dict:
     return {
         "linkedin": LinkedInAgent(),
-        "memory": MemoryAgent(),
+        "memory": MemoryAgent(user_id=user_id),
     }
 
 
@@ -111,7 +110,6 @@ async def get_engagement_tips(
 
 @router.get("/profile-tips")
 async def get_profile_tips(
-    user_id: str = Query("user_default"),
     agents: Dict = Depends(get_agents),
 ):
     """Get suggestions to improve LinkedIn profile"""
@@ -123,7 +121,6 @@ async def get_profile_tips(
         tips = linkedin_agent.build_linkedin_profile_tips(user_context)
 
         return {
-            "user_id": user_id,
             "tips": tips,
             "total": len(tips),
         }

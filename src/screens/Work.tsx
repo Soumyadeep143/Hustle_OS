@@ -4,6 +4,8 @@ import { api, type MemoryResponse, type Application, type TeamProject } from '..
 import { useUi } from '../store/useUi';
 import { UnderlineTabs, TaskRow, ProgressBar, Chip } from '../components/ui';
 import { EditApplicationSheet } from '../components/sheets/EditApplicationSheet';
+import { NetworkTab } from './work/NetworkTab';
+import { ReadinessTab } from './work/ReadinessTab';
 import type { Tone } from '../lib/types';
 
 const RISK_TONE: Record<string, 'red' | 'blue' | 'yellow'> = { high: 'red', medium: 'yellow', low: 'blue', unknown: 'blue' };
@@ -54,7 +56,7 @@ export function Work() {
       </div>
 
       <UnderlineTabs
-        tabs={['Tasks', 'Applications', 'Projects'] as Array<typeof workTab>}
+        tabs={['Tasks', 'Applications', 'Projects', 'Network', 'Readiness'] as Array<typeof workTab>}
         value={workTab}
         onChange={setWorkTab}
       />
@@ -128,6 +130,10 @@ export function Work() {
           {projects.length === 0 && <p className="py-4 text-[13px] text-[var(--color-ink-2)]">No projects yet.</p>}
         </div>
       )}
+
+      {workTab === 'Network' && <NetworkTab />}
+
+      {workTab === 'Readiness' && <ReadinessTab />}
 
       <EditApplicationSheet
         open={applicationSheet !== undefined}

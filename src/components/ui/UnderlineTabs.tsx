@@ -10,13 +10,13 @@ export function UnderlineTabs<T extends string>({
   onChange: (v: T) => void;
 }) {
   return (
-    <div className="flex gap-[22px] border-b border-[var(--color-line-2)]">
+    <div className="flex gap-[22px] overflow-x-auto border-b border-[var(--color-line-2)] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((tab) => (
         <button
           key={tab}
           onClick={() => onChange(tab)}
           className={clsx(
-            'relative pb-2.5 text-[14px] font-medium transition-colors',
+            'relative shrink-0 pb-2.5 text-[14px] font-medium transition-colors',
             value === tab ? 'text-[var(--color-ink)]' : 'text-[var(--color-ink-3)]'
           )}
         >

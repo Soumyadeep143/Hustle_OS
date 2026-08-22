@@ -124,10 +124,12 @@ export function Landing() {
           <h2 className="font-[var(--font-display)] text-[24px] font-semibold text-[var(--color-ink)]">
             Ready to actually get things done?
           </h2>
-          <p className="mx-auto mt-2 max-w-[420px] text-[13.5px] text-[var(--color-ink-2)]">
-            No filler tasks, no seeded fake data — HustleOS runs on what's really yours from the first
-            minute.
-          </p>
+          <div className="mt-2 flex justify-center">
+            <p className="max-w-[420px] text-[13.5px] text-[var(--color-ink-2)]">
+              No filler tasks, no seeded fake data — HustleOS runs on what's really yours from the first
+              minute.
+            </p>
+          </div>
           <div className="mt-6 flex justify-center">
             <Link to="/signup">
               <Button size="lg" variant="primary" rounded>

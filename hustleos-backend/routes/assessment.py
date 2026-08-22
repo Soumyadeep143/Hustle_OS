@@ -1,20 +1,20 @@
 from fastapi import APIRouter, Depends, Query
 from agents import AssessmentAgent, MemoryAgent
+from auth import get_current_user_id
 from typing import Dict
 
 router = APIRouter()
 
 
-def get_agents() -> Dict:
+def get_agents(user_id: str = Depends(get_current_user_id)) -> Dict:
     return {
         "assessment": AssessmentAgent(),
-        "memory": MemoryAgent(),
+        "memory": MemoryAgent(user_id=user_id),
     }
 
 
 @router.get("/career-readiness")
 async def get_career_readiness(
-    user_id: str = Query("user_default"),
     agents: Dict = Depends(get_agents),
 ):
     """Calculate career readiness score (0-100)"""
@@ -26,7 +26,6 @@ async def get_career_readiness(
         result = assessment_agent.calculate_career_readiness_score(user_context)
 
         return {
-            "user_id": user_id,
             "score": result["score"],
             "level": result["level"],
             "details": result["details"],
@@ -38,7 +37,6 @@ async def get_career_readiness(
 
 @router.get("/recommendations")
 async def get_recommendations(
-    user_id: str = Query("user_default"),
     agents: Dict = Depends(get_agents),
 ):
     """Get detailed readiness recommendations"""
@@ -56,7 +54,6 @@ async def get_recommendations(
 
 @router.get("/report")
 async def get_readiness_report(
-    user_id: str = Query("user_default"),
     agents: Dict = Depends(get_agents),
 ):
     """Generate comprehensive readiness report"""
@@ -68,7 +65,6 @@ async def get_readiness_report(
         report = assessment_agent.generate_readiness_report(user_context)
 
         return {
-            "user_id": user_id,
             "report": report,
         }
     except Exception as e:
@@ -80,7 +76,6 @@ async def calculate_job_fit(
     company: str = Query(...),
     role: str = Query(...),
     salary: str = Query(...),
-    user_id: str = Query("user_default"),
     agents: Dict = Depends(get_agents),
 ):
     """Calculate fit score for a specific job"""

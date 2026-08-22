@@ -7,7 +7,7 @@ export type Theme = 'light' | 'dark';
 
 interface UiState {
   workspace: Workspace;
-  workTab: 'Tasks' | 'Applications' | 'Projects';
+  workTab: 'Tasks' | 'Applications' | 'Projects' | 'Network' | 'Readiness';
   sheet: Sheet;
   theme: Theme;
   toast: string | null;

@@ -538,6 +538,98 @@ export interface Integration {
   last_sync?: string | null;
 }
 
+// ---- Network: outreach campaigns + LinkedIn recruiter/DM/post tools ----
+
+export interface DreamCompany {
+  name: string;
+  size: string;
+  stage: string;
+  hiring: boolean;
+  salary_range?: string | null;
+  fit_signals: string[];
+  reach_score: number;
+}
+
+export interface CampaignEmail {
+  day: number;
+  type: string;
+  subject: string;
+  body: string;
+}
+
+export interface HiringManager {
+  name: string;
+  title: string;
+  focus: string;
+}
+
+export interface CampaignPlan {
+  company: string;
+  role: string;
+  fit_signals: string[];
+  reach_score: number;
+  hiring_managers: HiringManager[];
+  email_sequence: CampaignEmail[];
+  campaign_duration_days: number;
+  total_touchpoints: number;
+}
+
+export interface LinkedInRecruiterResult {
+  name: string;
+  title: string;
+  focus: string;
+  fit_score: number;
+  reason: string;
+  priority: 'High' | 'Medium' | 'Low';
+}
+
+export interface LinkedInDmResult {
+  recruiter: string;
+  dm: string;
+  tips: string[];
+}
+
+export interface LinkedInPostResult {
+  topic: string;
+  post: string;
+  tips: string[];
+}
+
+// ---- Assessment: real, deterministic career-readiness scoring (no LLM guessing) ----
+
+export interface CareerReadiness {
+  score: number;
+  level: string;
+  details: string[];
+  next_actions: string[];
+}
+
+export interface ReadinessImprovement {
+  current: number;
+  target: number;
+  action: string;
+}
+
+export interface ReadinessRecommendations {
+  overall_score: number;
+  level: string;
+  improvements: {
+    skills: ReadinessImprovement;
+    applications: ReadinessImprovement;
+    interviews: ReadinessImprovement;
+    follow_ups: ReadinessImprovement;
+  };
+  quick_wins: string[];
+  resources: string[];
+}
+
+export interface JobFitResult {
+  company: string;
+  role: string;
+  fit_score: number;
+  fit_level: string;
+}
+
 // ---- Home: TODAY timeline, SIGNALS, AI Brief — real editable records, not derived views ----
 
 export type ItemType = 'task' | 'event' | 'interview' | 'follow_up' | 'reminder' | 'deadline';
@@ -1013,6 +1105,61 @@ export const api = {
     },
     updateBrief: async (headline: string, userId: string = DEFAULT_USER_ID): Promise<Brief> => {
       const { data } = await apiClient.patch<Brief>('/home/brief', { headline }, { params: { user_id: userId } });
+      return data;
+    },
+  },
+
+  outreach: {
+    findDreamCompanies: async (role: string, location: string): Promise<{ companies: DreamCompany[]; total: number }> => {
+      const { data } = await apiClient.post('/outreach/dream-companies', { role, location });
+      return data;
+    },
+    getCampaignPlan: async (company: string, role: string): Promise<CampaignPlan> => {
+      const { data } = await apiClient.get<CampaignPlan>('/outreach/campaign-plan', { params: { company, role } });
+      return data;
+    },
+  },
+
+  linkedin: {
+    findRecruiters: async (
+      company: string,
+      location: string
+    ): Promise<{ recruiters: LinkedInRecruiterResult[]; total: number }> => {
+      const { data } = await apiClient.post('/linkedin/recruiters', null, { params: { company, location } });
+      return data;
+    },
+    generateDm: async (recruiter: { name: string; title: string; focus: string }, role: string): Promise<LinkedInDmResult> => {
+      const { data } = await apiClient.post<LinkedInDmResult>('/linkedin/dm', {
+        recruiter_name: recruiter.name,
+        recruiter_title: recruiter.title,
+        recruiter_focus: recruiter.focus,
+        role,
+      });
+      return data;
+    },
+    getProfileTips: async (): Promise<{ tips: string[]; total: number }> => {
+      const { data } = await apiClient.get('/linkedin/profile-tips');
+      return data;
+    },
+    generatePost: async (topic: string): Promise<LinkedInPostResult> => {
+      const { data } = await apiClient.post<LinkedInPostResult>('/linkedin/generate-post', { topic });
+      return data;
+    },
+  },
+
+  assessment: {
+    getCareerReadiness: async (): Promise<CareerReadiness> => {
+      const { data } = await apiClient.get<CareerReadiness>('/assessment/career-readiness');
+      return data;
+    },
+    getRecommendations: async (): Promise<ReadinessRecommendations> => {
+      const { data } = await apiClient.get<ReadinessRecommendations>('/assessment/recommendations');
+      return data;
+    },
+    getJobFit: async (company: string, role: string, salary: string): Promise<JobFitResult> => {
+      const { data } = await apiClient.post<JobFitResult>('/assessment/job-fit', null, {
+        params: { company, role, salary },
+      });
       return data;
     },
   },

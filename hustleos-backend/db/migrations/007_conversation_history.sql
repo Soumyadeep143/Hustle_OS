@@ -1,10 +1,14 @@
--- HustleOS — conversation history for real multi-turn context
+-- HustleOS — conversation history column on conversation_state
 --
--- Stores the last N (user, assistant) exchanges so VoiceAgent's chat path
--- sees actual conversational history instead of treating every message as
--- an isolated one-shot query. Written/read by
--- agents/conversation_store.py's append_turn() / get_history(). Trimmed
--- server-side on every write so the JSONB blob never grows unbounded.
+-- Adds the `history` jsonb column that conversation_store.py's
+-- append_turn() / get_history() methods read and write.
+-- Without this column every get_history() silently returns [] and
+-- every append_turn() rolls back silently — the agent has no memory
+-- of anything said earlier in the same session.
+--
+-- Format stored: [{role, content}, ...] ordered oldest-first,
+-- trimmed to the last _MAX_HISTORY_TURNS * 2 messages on each write
+-- so the blob never grows unbounded.
 --
 -- Idempotent: safe to run more than once.
 

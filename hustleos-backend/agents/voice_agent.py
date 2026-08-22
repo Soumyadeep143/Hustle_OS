@@ -330,42 +330,76 @@ class VoiceAgent:
                 try:
                     conv_store.append_turn(user_id, transcript, reply)
                 except Exception:
-                    pass
+                    pass  # history is never a hard dependency for producing a reply
+
+        def _serialise_assistant_message(msg) -> Dict:
+            """Convert an OpenAI SDK ChatCompletionMessage object into a plain
+            dict so the messages list stays uniformly JSON-serialisable across
+            every loop iteration. Passing the SDK object directly works on some
+            SDK versions but silently corrupts or raises on others — always
+            convert explicitly."""
+            d: Dict = {"role": msg.role}
+            # content may be None when the model only emits tool_calls
+            if msg.content is not None:
+                d["content"] = msg.content
+            if msg.tool_calls:
+                d["tool_calls"] = [
+                    {
+                        "id":       tc.id,
+                        "type":     "function",
+                        "function": {
+                            "name":      tc.function.name,
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in msg.tool_calls
+                ]
+            return d
 
         try:
-            for _ in range(4):  # up from 3 — new tools may chain
+            for _ in range(4):  # 4 rounds — new chaining tools need the headroom
                 response = self.client.chat.completions.create(
                     model=self.model,
-                    max_tokens=400,
+                    max_tokens=500,
                     messages=messages,
                     tools=tools,
                 )
                 message    = response.choices[0].message
                 tool_calls = message.tool_calls or []
+
                 if not tool_calls:
+                    # No tool call — this is the final reply.
                     final_text = (message.content or "").strip()
                     _remember(final_text)
                     return final_text
 
-                messages.append(message)
+                # Convert SDK object → plain dict BEFORE appending so the list
+                # stays uniformly serialisable for the next API call.
+                messages.append(_serialise_assistant_message(message))
+
                 for call in tool_calls:
                     try:
                         args = json.loads(call.function.arguments or "{}")
                     except json.JSONDecodeError:
                         args = {}
-                    result = execute_tool(call.function.name, args, tool_ctx)
+                    result = execute_tool(call.function.name, args, tool_ctx or {})
                     messages.append(
                         {
-                            "role":        "tool",
+                            "role":         "tool",
                             "tool_call_id": call.id,
-                            "content":     json.dumps(result, default=str),
+                            "content":      json.dumps(result, default=str),
                         }
                     )
+
+            # Exhausted all rounds without a final text reply — use a grounded
+            # fallback based on the real context snapshot rather than a generic
+            # "I don't know" string.
             fallback = _fallback_response(user_name, context)
             _remember(fallback)
             return fallback
+
         except Exception as e:
-            print(f"Error generating assistant response: {e}")
+            print(f"Error in _respond: {e}")
             return _fallback_response(user_name, context)
 
 
