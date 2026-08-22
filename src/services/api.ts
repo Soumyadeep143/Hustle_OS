@@ -757,24 +757,29 @@ export const api = {
       });
       return data;
     },
+    // include_audio defaults to false: every caller (text chat, voice mode)
+    // now fetches audio separately via tts() below rather than waiting on
+    // TTS inline — the conversational round-trip (STT + tool-calling LLM)
+    // shouldn't be gated on the slowest, most failure-prone leg of a turn.
     command: async (
       transcript: string,
       timezone: string = browserTimezone(),
-      includeAudio: boolean = true
+      includeAudio: boolean = false
     ): Promise<VoiceResponse> => {
-      const { data } = await apiClient.post<VoiceResponse>(
-        '/voice/command',
-        { transcript, timezone, include_audio: includeAudio },
-        // Voice mode still does STT + tool-calling + TTS + a large base64
-        // audio payload over the wire — give it more headroom than the
-        // shared default, especially on a slow/cold-started backend.
-        includeAudio ? { timeout: 60000 } : undefined
-      );
+      const { data } = await apiClient.post<VoiceResponse>('/voice/command', {
+        transcript,
+        timezone,
+        include_audio: includeAudio,
+      });
       return data;
     },
     tts: async (text: string): Promise<{ audio_url: string | null }> => {
+      // TTS is an external API call (Sarvam/ElevenLabs) plus a large base64
+      // payload — the slowest, most timeout-prone leg of a voice turn, so
+      // it gets more headroom than the shared default.
       const { data } = await apiClient.post<{ audio_url: string | null }>('/voice/tts', null, {
         params: { text },
+        timeout: 60000,
       });
       return data;
     },

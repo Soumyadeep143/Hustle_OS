@@ -104,7 +104,12 @@ export function useVoiceSession() {
         }
         setError(null);
 
-        const a = await api.voice.command(t.text);
+        // Skip audio on the main call — TTS is the slowest, most
+        // failure-prone part of a turn (external API call, big payload),
+        // and there's no reason the text reply should wait on it. It's
+        // fetched separately below, and a failure there degrades to
+        // silent (no audio) rather than losing the whole turn.
+        const a = await api.voice.command(t.text, undefined, false);
         if (epoch.current !== myEpoch) return;
         setAnswer(a.response);
         // The assistant may have just created a task via its create_task
@@ -112,11 +117,15 @@ export function useVoiceSession() {
         // needs an explicit refresh or it silently never shows up.
         void useUi.getState().refreshTasks();
 
-        let url = a.audio_url;
-        if (!url) {
+        let url: string | null = null;
+        try {
           const ttsResult = await api.voice.tts(a.response);
           if (epoch.current !== myEpoch) return;
           url = ttsResult.audio_url;
+        } catch {
+          // TTS failed or timed out — the text answer already landed via
+          // setAnswer above, so fall through to the silent branch below
+          // instead of erroring out a turn that actually succeeded.
         }
 
         // Continuous conversation: once the response finishes playing, go
