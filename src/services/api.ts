@@ -29,8 +29,17 @@ apiClient.interceptors.request.use((config) => {
 
 interface RetryableConfig {
   method?: string;
+  url?: string;
   __retryCount?: number;
 }
+
+// POST endpoints where a timeout/network failure is safe to retry blind:
+// all three are read-only or idempotent in effect (transcribe/tts do no
+// writes at all; command's writes go through explicit tool calls gated on
+// the user's actual words, so re-sending the same transcript after a
+// timeout — where we don't know if the first attempt even reached the
+// server — reproduces the same intent rather than compounding it).
+const RETRYABLE_POST_PATHS = ['/voice/command', '/voice/transcribe', '/voice/tts'];
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -42,10 +51,15 @@ apiClient.interceptors.response.use(
       window.dispatchEvent(new Event('hustleos:unauthorized'));
     }
 
+    // No response at all (timeout, dropped connection) or a 5xx — never
+    // retry on a 4xx, that's a real rejection the server already decided on.
     const isServerOrNetworkError = !error.response || error.response.status >= 500;
-    const isGet = config?.method?.toLowerCase() === 'get';
+    const method = config?.method?.toLowerCase();
+    const isRetryableGet = method === 'get';
+    const isRetryablePost =
+      method === 'post' && !!config?.url && RETRYABLE_POST_PATHS.some((p) => config.url!.includes(p));
 
-    if (config && isGet && isServerOrNetworkError) {
+    if (config && (isRetryableGet || isRetryablePost) && isServerOrNetworkError) {
       config.__retryCount = config.__retryCount ?? 0;
       if (config.__retryCount < MAX_RETRIES) {
         config.__retryCount += 1;
